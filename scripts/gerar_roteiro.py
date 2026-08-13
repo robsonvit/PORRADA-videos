@@ -74,14 +74,14 @@ def escolher_tema() -> str:
 # ── Geração de roteiro via Grok ───────────────────────────────────────────────
 def gerar_roteiro(tema: str) -> dict:
     """
-    Chama a API Grok para gerar um roteiro completo de vídeo PORRADA.
+    Chama a API Groq para gerar um roteiro completo de vídeo PORRADA.
 
     Returns:
         dict com chaves: titulo, roteiro_fala, palavras_chave_pexels, hashtags, tema
     """
     client = OpenAI(
-        api_key=os.environ["GROK_API_KEY"],
-        base_url="https://api.x.ai/v1",
+        api_key=os.environ["GROK_API_KEY"],  # O secret no Github está como GROK_API_KEY
+        base_url="https://api.groq.com/openai/v1",
     )
 
     prompt = f"""Você é um roteirista de vídeos virais chamados "PORRADA" — vídeos de verdades duras e impactantes para reflexão profunda.
@@ -103,9 +103,9 @@ REGRAS CRÍTICAS:
 - Exatamente 4 palavras-chave Pexels
 - 5 hashtags em português"""
 
-    print("🤖 Chamando API Grok para gerar roteiro...")
+    print("🤖 Chamando API Groq para gerar roteiro...")
     response = client.chat.completions.create(
-        model="grok-3",
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         temperature=0.85,
