@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from gerar_roteiro import escolher_tema, gerar_roteiro, salvar_tema_usado
 from gerar_voz import gerar_voz, calcular_duracao_audio
 from buscar_videos_pexels import buscar_videos
-from montar_video import montar_video, get_media_duration
+from montar_video import montar_video, get_media_duration, SHELBY_CLIP_DURATION
 from enviar_telegram import enviar_video_telegram, enviar_mensagem_telegram
 
 # ── Paths do projeto ──────────────────────────────────────────────────────────
@@ -82,17 +82,18 @@ def executar_pipeline(numero: int = 1) -> bool:
         if not pexels_clips:
             raise RuntimeError("❌ Nenhum clip Pexels foi baixado!")
 
-        # ── Passo 4: Coleta clips Shelby ──────────────────────────────────
-        print("\n📂 [4/6] Coletando clips Shelby...")
+        # ── Passo 4: Coleta clips Shelby ──────────────────────────────────────
+        print("\n[4/6] Coletando clips Shelby...")
         shelby_clips = sorted(SHELBY_DIR.glob("*.mp4"))
         if not shelby_clips:
-            raise RuntimeError(f"❌ Nenhum clip encontrado em: {SHELBY_DIR}")
-        print(f"  ✅ {len(shelby_clips)} clips Shelby disponíveis")
+            raise RuntimeError(f"Nenhum clip encontrado em: {SHELBY_DIR}")
+        print(f"  {len(shelby_clips)} clips Shelby disponiveis")
 
-        # ── Passo 5: Monta o vídeo final ──────────────────────────────────
-        print("\n🎬 [5/6] Montando vídeo final...")
+        # ── Passo 5: Monta o vídeo final ──────────────────────────────────────
+        # word_timings vai direto para montar_video que gera as legendas internamente
+        # Audio começa no segundo 0, legendas aparecem desde o segundo 0
+        print("\n[5/6] Montando video final...")
 
-        # Cria nome seguro para o arquivo de saída
         titulo_seguro = (
             roteiro["titulo"]
             .replace(" ", "_")
@@ -106,7 +107,7 @@ def executar_pipeline(numero: int = 1) -> bool:
             shelby_clips=[str(c) for c in shelby_clips],
             pexels_clips=pexels_clips,
             audio_file=audio_file,
-            word_timings=word_timings,
+            word_timings=word_timings,   # Legendas geradas internamente com offset=0
             output_file=output_file,
             work_dir=str(work_dir),
         )
