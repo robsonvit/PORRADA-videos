@@ -66,10 +66,10 @@ jobs:
         run: |
           mkdir -p models
           echo "Baixando kokoro-v1.0.onnx (~300MB)..."
-          wget -q --show-progress -O models/kokoro-v1.0.onnx \
+          curl -L -o models/kokoro-v1.0.onnx \
             "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
           echo "Baixando voices-v1.0.bin (~200MB)..."
-          wget -q --show-progress -O models/voices-v1.0.bin \
+          curl -L -o models/voices-v1.0.bin \
             "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
           echo "Modelos Kokoro prontos!"
           ls -lh models/
