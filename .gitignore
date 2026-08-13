@@ -1,0 +1,9 @@
+output/
+temp/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.local
+*.log
+temp_work/
