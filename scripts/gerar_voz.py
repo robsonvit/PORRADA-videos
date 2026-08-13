@@ -19,8 +19,8 @@ from kokoro_onnx import Kokoro
 from openai import OpenAI
 
 # ── Configurações ─────────────────────────────────────────────────────────────
-KOKORO_VOICE  = "pm_alex"          # Voz escolhida pelo usuário
-KOKORO_SPEED  = 0.88               # Velocidade (0.88 = ligeiramente pausado, mais impacto)
+KOKORO_VOICE  = "pm_santa"         # Voz escolhida pelo usuário
+KOKORO_SPEED  = 0.80               # Mais lento = mais grave e impactante
 KOKORO_LANG   = "pt-br"
 
 # Pasta dos modelos Kokoro (configurável via variável de ambiente)

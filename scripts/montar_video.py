@@ -1,18 +1,16 @@
 """
-montar_video.py
-Montagem final do vídeo PORRADA usando FFmpeg.
+montar_video.py — Montagem final do vídeo PORRADA usando FFmpeg.
 
-Estrutura do vídeo (1080x1920 vertical):
-  ├─ 0:00–0:04  → Clip Shelby (gancho visual / capa)
-  ├─ 0:04+      → Clips Pexels (espelhados, 3s cada)
-  ├─ Audio      → Narração começa no SEGUNDO 0 (junto com Shelby)
-  ├─ Legendas   → Aparecem desde o SEGUNDO 0, amarelo dourado, centro
-  ├─ HDR        → curves strong_contrast + eq saturation/contrast
-  └─ Glow       → gblur leve + blend screen (brilho fraco)
+Correções aplicadas:
+  [FIX-1] Legendas limpas: pontuação removida, agrupamento em MÁXIMO 2 palavras
+  [FIX-2] Frame freeze: fps=30 + setpts=PTS-STARTPTS em todos os clips antes do concat
+  [FIX-3] Legenda embolada: escape seguro via re.sub + pausa mínima 0.6s por bloco
+  [FIX-4] Voz rápida: tempo mínimo por bloco aumentado para 0.6s
 """
 
 import json
 import os
+import re
 import random
 import subprocess
 import sys
@@ -27,6 +25,7 @@ SHELBY_CLIP_DURATION = 4.0   # Segundos do clip Shelby no início
 MAX_CLIP_DURATION    = 3.0   # MÁXIMO 3s por clip Pexels (evita cópias)
 FONT_FILE = "/usr/share/fonts/truetype/anton/Anton-Regular.ttf"
 FONT_SIZE = 84
+VIDEO_FPS = 30               # FPS único para todos os clips → elimina congelamentos
 
 
 # ── Utilidades FFmpeg ─────────────────────────────────────────────────────────
@@ -56,27 +55,47 @@ def run_ffmpeg(args: list, description: str = "") -> None:
         raise RuntimeError(f"FFmpeg falhou: {description}")
 
 
-# ── Geração de legendas via drawtext ─────────────────────────────────────────
+# ── [FIX-1] Limpeza e escape de texto para drawtext ──────────────────────────
+def _limpar_palavra(palavra: str) -> str:
+    """
+    Remove TODA a pontuação de uma palavra.
+    Mantém apenas letras (incluindo acentuadas), números e hífen.
+    """
+    # Mantém letras Unicode (incluindo á é ã ç ñ etc) e números
+    limpa = re.sub(r"[^\w\-]", "", palavra, flags=re.UNICODE)
+    # Remove também underscores e números que possam vir do whisper
+    limpa = re.sub(r"[_\d]", "", limpa)
+    return limpa.strip().upper()
+
+
 def _escape_drawtext(texto: str) -> str:
-    """Escapa caracteres especiais para o filtro drawtext do FFmpeg."""
+    """
+    Escapa caracteres para o filtro drawtext do FFmpeg.
+    Regra dentro de single-quotes: apenas \\ e \\: precisam de escape.
+    Apostrofos são simplesmente removidos na limpeza anterior.
+    """
     texto = texto.replace("\\", "\\\\")
-    texto = texto.replace("'",  "\\'")
+    texto = texto.replace("'",  "")       # Removido na limpeza, mas garantia extra
     texto = texto.replace(":",  "\\:")
     texto = texto.replace("%",  "\\%")
+    texto = texto.replace("[",  "")
+    texto = texto.replace("]",  "")
+    texto = texto.replace("{",  "")
+    texto = texto.replace("}",  "")
     return texto
 
 
-def gerar_filtro_legendas(word_timings: list, font_file: str, offset: float = 0.0) -> str:
+def gerar_filtro_legendas(word_timings: list, font_file: str) -> str:
     """
     Gera cadeia de filtros drawtext para legendas palavra a palavra.
 
-    Cada bloco mostra 2-3 palavras em maiúsculas, centralizadas na tela,
-    amarelo dourado com outline preto espesso.
+    [FIX-1] Máximo 2 palavras por bloco (era 3 — muito para velocidade da voz)
+    [FIX-3] Pausa mínima de 0.6s por bloco (era 0.35 — muito rápido)
+    [FIX-1] Texto limpo sem pontuação para não quebrar sintaxe FFmpeg
 
     Args:
-        word_timings: Lista [{word, start, duration}] do edge-tts
+        word_timings: [{word, start, duration}] do Groq Whisper
         font_file: Caminho absoluto da fonte TrueType
-        offset: Deslocamento em segundos (0 = começa junto com o áudio)
 
     Returns:
         String de filtros FFmpeg prontos para uso no filter_complex
@@ -84,7 +103,7 @@ def gerar_filtro_legendas(word_timings: list, font_file: str, offset: float = 0.
     if not word_timings:
         return "null"
 
-    # ── Agrupa em blocos de 2-3 palavras ────────────────────────────────────
+    # ── Agrupa em blocos de MÁXIMO 2 palavras ────────────────────────────────
     grupos = []
     grupo_atual = []
 
@@ -94,7 +113,8 @@ def gerar_filtro_legendas(word_timings: list, font_file: str, offset: float = 0.
         fim_atual   = timing["start"] + timing["duration"]
         pausa       = prox_inicio - fim_atual
 
-        if len(grupo_atual) >= 3 or pausa > 0.75:
+        # [FIX-1] Máximo 2 palavras OU pausa natural de 0.4s
+        if len(grupo_atual) >= 2 or pausa > 0.40:
             grupos.append(grupo_atual)
             grupo_atual = []
 
@@ -104,25 +124,34 @@ def gerar_filtro_legendas(word_timings: list, font_file: str, offset: float = 0.
     # ── Gera um filtro drawtext por bloco ────────────────────────────────────
     filtros = []
     for grupo in grupos:
-        inicio = grupo[0]["start"] + offset
-        fim    = grupo[-1]["start"] + grupo[-1]["duration"] + offset + 0.10
-        # Garante mínimo de 0.35s de exibição
-        if fim - inicio < 0.35:
-            fim = inicio + 0.35
+        inicio = grupo[0]["start"]
+        fim    = grupo[-1]["start"] + grupo[-1]["duration"]
 
-        texto          = " ".join(w["word"].upper() for w in grupo)
+        # [FIX-3] Mínimo 0.6s de exibição para não piscar
+        if fim - inicio < 0.60:
+            fim = inicio + 0.60
+
+        # [FIX-1] Limpa pontuação de cada palavra antes de exibir
+        palavras_limpas = [_limpar_palavra(w["word"]) for w in grupo]
+        palavras_limpas = [p for p in palavras_limpas if p]  # Remove vazias
+        if not palavras_limpas:
+            continue
+
+        texto          = " ".join(palavras_limpas)
         texto_escapado = _escape_drawtext(texto)
+        if not texto_escapado.strip():
+            continue
 
         f = (
             f"drawtext="
             f"fontfile={font_file}:"
             f"text='{texto_escapado}':"
             f"fontsize={FONT_SIZE}:"
-            f"fontcolor=#FFD700:"       # Amarelo dourado (igual à imagem)
+            f"fontcolor=#FFD700:"        # Amarelo dourado
             f"borderw=5:"               # Outline preto espesso
             f"bordercolor=black:"
-            f"x=(w-text_w)/2:"         # Centralizado horizontalmente
-            f"y=(h-text_h)/2:"         # Centralizado verticalmente (centro exato)
+            f"x=(w-text_w)/2:"          # Centralizado horizontalmente
+            f"y=(h-text_h)/2:"          # Centralizado verticalmente
             f"enable='between(t,{inicio:.3f},{fim:.3f})'"
         )
         filtros.append(f)
@@ -133,7 +162,7 @@ def gerar_filtro_legendas(word_timings: list, font_file: str, offset: float = 0.
     return ",".join(filtros)
 
 
-# ── Processamento individual de clipes ────────────────────────────────────────
+# ── [FIX-2] Processamento de clips com FPS uniforme ──────────────────────────
 def processar_clip_vertical(
     input_path: str,
     output_path: str,
@@ -142,23 +171,28 @@ def processar_clip_vertical(
 ) -> None:
     """
     Converte clipe para formato vertical 1080x1920.
-    Scale + crop centralizado + opcional hflip.
+
+    [FIX-2] fps=30 ANTES de qualquer outro filtro → elimina congelamentos
+    [FIX-2] setpts=PTS-STARTPTS → reseta timestamps para evitar descontinuidades
     """
     hflip_str = "hflip," if aplicar_hflip else ""
     vf = (
+        f"fps={VIDEO_FPS},"               # [FIX-2] Normaliza FPS PRIMEIRO
         f"{hflip_str}"
         f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
-        f"setsar=1"
+        f"setsar=1,"
+        f"setpts=PTS-STARTPTS"            # [FIX-2] Reseta timestamps
     )
     run_ffmpeg([
         "-i", input_path,
         "-t", str(duracao),
         "-vf", vf,
         "-c:v", "libx264", "-crf", "22", "-preset", "fast",
+        "-r", str(VIDEO_FPS),            # [FIX-2] Força FPS também no codec
         "-an",
         output_path,
-    ], description=f"Convertendo {Path(input_path).name} ({duracao:.1f}s)")
+    ], description=f"Convertendo {Path(input_path).name} ({duracao:.1f}s @ {VIDEO_FPS}fps)")
 
 
 # ── Função principal de montagem ──────────────────────────────────────────────
@@ -171,15 +205,7 @@ def montar_video(
     work_dir: str,
 ) -> str:
     """
-    Monta o vídeo final completo.
-
-    Estrutura de tempo:
-      - Vídeo: [Shelby 4s] + [Pexels clips 3s cada]
-      - Áudio: Narração começa no SEGUNDO 0 (junto com Shelby visual)
-      - Legendas: Começam no SEGUNDO 0 (sem offset — sincronizadas com áudio)
-
-    Returns:
-        Path do vídeo final gerado
+    Monta o vídeo final completo com todos os fixes aplicados.
     """
     work = Path(work_dir)
 
@@ -187,7 +213,6 @@ def montar_video(
     duracao_audio = get_media_duration(audio_file)
     print(f"\nDuracao do audio: {duracao_audio:.1f}s")
 
-    # Duração total: Shelby + clipes Pexels que cobrem a narração
     duracao_pexels_necessaria = max(1.0, duracao_audio - SHELBY_CLIP_DURATION)
     duracao_total = SHELBY_CLIP_DURATION + duracao_pexels_necessaria
     print(f"Duracao total do video: {duracao_total:.1f}s")
@@ -209,7 +234,6 @@ def montar_video(
     while acumulado < duracao_pexels_necessaria:
         clip_orig = pexels_clips[idx % len(pexels_clips)]
         dur_orig  = get_media_duration(clip_orig)
-        # MÁXIMO 3 segundos por clipe Pexels
         dur_clip  = min(dur_orig, MAX_CLIP_DURATION, duracao_pexels_necessaria - acumulado)
         if dur_clip < 0.5:
             break
@@ -222,37 +246,40 @@ def montar_video(
 
     print(f"  {len(pexels_processados)} clips Pexels ({acumulado:.1f}s)")
 
-    # ── 4. Concatena Shelby + Pexels ─────────────────────────────────────────
-    print("\nConcatenando clips...")
-    concat_txt = str(work / "concat.txt")
+    # ── 4. Concatena usando concat FILTER (mais robusto que demuxer) ──────────
+    print("\nConcatenando clips com concat filter...")
     todos = [shelby_out] + pexels_processados
 
-    with open(concat_txt, "w") as f:
-        for c in todos:
-            f.write(f"file '{c}'\n")
+    # Monta inputs e concat filter dinamicamente
+    inputs = []
+    for c in todos:
+        inputs += ["-i", c]
+
+    n = len(todos)
+    # Concat filter: [0:v][1:v][2:v]... concat=n=N:v=1:a=0 [vconcat]
+    concat_inputs = "".join(f"[{i}:v]" for i in range(n))
+    concat_filter = f"{concat_inputs}concat=n={n}:v=1:a=0[vconcat]"
 
     video_concat = str(work / "video_concat.mp4")
-    run_ffmpeg([
-        "-f", "concat", "-safe", "0",
-        "-i", concat_txt,
-        "-c", "copy",
-        video_concat,
-    ], description="Concatenando todos os clips")
+    run_ffmpeg(
+        inputs + [
+            "-filter_complex", concat_filter,
+            "-map", "[vconcat]",
+            "-c:v", "libx264", "-crf", "20", "-preset", "fast",
+            "-r", str(VIDEO_FPS),
+            video_concat,
+        ],
+        description="Concatenando todos os clips (filter)"
+    )
 
-    # ── 5. Monta vídeo final ──────────────────────────────────────────────────
-    # Áudio começa no segundo 0 (SEM silêncio de introdução)
-    # Legendas aparecem desde o segundo 0 (offset=0)
+    # ── 5. Monta vídeo final com legendas + efeitos ───────────────────────────
     print("\nGerando filtro de legendas (drawtext)...")
     legenda_filter = gerar_filtro_legendas(
         word_timings=word_timings,
         font_file=FONT_FILE,
-        offset=0.0,   # Legendas sincronizadas com o áudio desde o segundo 0
     )
 
-    # Filter complex completo:
-    # 1. Legendas (drawtext palavra a palavra)
-    # 2. HDR: curves + eq
-    # 3. Glow: gblur + blend screen fraco
+    # Filter complex: legendas → HDR → glow
     filter_complex = (
         f"[0:v]{legenda_filter},"
         f"curves=preset=strong_contrast,"
@@ -264,18 +291,19 @@ def montar_video(
 
     print("Renderizando video final com audio + legendas + efeitos...")
     run_ffmpeg([
-        "-i", video_concat,                   # video base
-        "-i", audio_file,                     # audio da narracao (começa no segundo 0)
+        "-i", video_concat,
+        "-i", audio_file,
         "-filter_complex", filter_complex,
         "-map", "[vout]",
         "-map", "1:a",
         "-c:v", "libx264", "-crf", "22", "-preset", "medium",
         "-c:a", "aac", "-b:a", "192k",
         "-t", str(duracao_total),
+        "-r", str(VIDEO_FPS),
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
         output_file,
-    ], description="Vídeo final")
+    ], description="Video final")
 
     tamanho = Path(output_file).stat().st_size / (1024 * 1024)
     print(f"\nVideo final: {output_file} ({tamanho:.1f} MB)")
