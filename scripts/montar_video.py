@@ -203,9 +203,12 @@ def montar_video(
     word_timings: list,
     output_file: str,
     work_dir: str,
+    musicas_dir: str = "",
 ) -> str:
     """
     Monta o vídeo final completo com todos os fixes aplicados.
+    
+    musicas_dir: pasta com os arquivos .mp3 de fundo (opcional). Se vazio, sem música.
     """
     work = Path(work_dir)
 
@@ -272,7 +275,17 @@ def montar_video(
         description="Concatenando todos os clips (filter)"
     )
 
-    # ── 5. Monta vídeo final com legendas + efeitos ───────────────────────────
+    # ── 5. Música de fundo (opcional) ────────────────────────────────────────
+    musica_escolhida = ""
+    if musicas_dir:
+        musicas_disponiveis = sorted(Path(musicas_dir).glob("*.mp3"))
+        if musicas_disponiveis:
+            musica_escolhida = str(random.choice(musicas_disponiveis))
+            print(f"\n[Musica] Escolhida: {Path(musica_escolhida).name}")
+        else:
+            print(f"\n[Musica] Nenhum .mp3 encontrado em {musicas_dir} — sem fundo.")
+
+    # ── 6. Monta vídeo final com legendas + efeitos ───────────────────────────
     print("\nGerando filtro de legendas (drawtext)...")
     legenda_filter = gerar_filtro_legendas(
         word_timings=word_timings,
@@ -289,21 +302,44 @@ def montar_video(
         f"[vmain][vblur]blend=all_mode=screen:all_opacity=0.12[vout]"
     )
 
+    # ── Monta áudio: narração pura OU narração + fundo 30% ────────────────────
+    if musica_escolhida:
+        print("Mixando narração + música de fundo (30%)...")
+        ffmpeg_inputs = [
+            "-i", video_concat,
+            "-i", audio_file,
+            "-i", musica_escolhida,
+        ]
+        # amix: voz em 100%, música em 30%. duration=first → corta na duração da narração
+        audio_filter = (
+            "[1:a]volume=1.0[voz];"
+            "[2:a]volume=0.30,atrim=duration=" + str(duracao_total) + "[bgm];"
+            "[voz][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+        filter_final = filter_complex + f";{audio_filter}"
+        audio_map = ["-map", "[aout]"]
+    else:
+        ffmpeg_inputs = [
+            "-i", video_concat,
+            "-i", audio_file,
+        ]
+        filter_final = filter_complex
+        audio_map = ["-map", "1:a"]
+
     print("Renderizando video final com audio + legendas + efeitos...")
-    run_ffmpeg([
-        "-i", video_concat,
-        "-i", audio_file,
-        "-filter_complex", filter_complex,
-        "-map", "[vout]",
-        "-map", "1:a",
-        "-c:v", "libx264", "-crf", "22", "-preset", "medium",
-        "-c:a", "aac", "-b:a", "192k",
-        "-t", str(duracao_total),
-        "-r", str(VIDEO_FPS),
-        "-movflags", "+faststart",
-        "-pix_fmt", "yuv420p",
-        output_file,
-    ], description="Video final")
+    run_ffmpeg(
+        ffmpeg_inputs + [
+            "-filter_complex", filter_final,
+            "-map", "[vout]",
+        ] + audio_map + [
+            "-c:v", "libx264", "-crf", "22", "-preset", "medium",
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", str(duracao_total),
+            "-r", str(VIDEO_FPS),
+            "-movflags", "+faststart",
+            "-pix_fmt", "yuv420p",
+            output_file,
+        ], description="Video final")
 
     tamanho = Path(output_file).stat().st_size / (1024 * 1024)
     print(f"\nVideo final: {output_file} ({tamanho:.1f} MB)")

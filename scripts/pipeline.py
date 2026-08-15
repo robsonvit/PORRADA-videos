@@ -31,6 +31,7 @@ from enviar_telegram import enviar_video_telegram, enviar_mensagem_telegram
 # ── Paths do projeto ──────────────────────────────────────────────────────────
 PROJETO_ROOT = Path(__file__).parent.parent
 SHELBY_DIR = PROJETO_ROOT / "VÍDEOS DO SHELBY"
+MUSICAS_DIR = PROJETO_ROOT / "musicas"
 OUTPUT_DIR = PROJETO_ROOT / "output"
 
 
@@ -103,13 +104,21 @@ def executar_pipeline(numero: int = 1) -> bool:
         )
         output_file = str(work_dir / f"PORRADA_{titulo_seguro}.mp4")
 
+        # Loga se musicas estao disponiveis
+        musicas_disponíveis = list(MUSICAS_DIR.glob("*.mp3")) if MUSICAS_DIR.exists() else []
+        if musicas_disponíveis:
+            print(f"  {len(musicas_disponíveis)} musica(s) de fundo disponivel(is) em: {MUSICAS_DIR}")
+        else:
+            print(f"  [AVISO] Pasta musicas/ nao encontrada ou vazia — video sem fundo musical.")
+
         montar_video(
             shelby_clips=[str(c) for c in shelby_clips],
             pexels_clips=pexels_clips,
             audio_file=audio_file,
-            word_timings=word_timings,   # Legendas geradas internamente com offset=0
+            word_timings=word_timings,
             output_file=output_file,
             work_dir=str(work_dir),
+            musicas_dir=str(MUSICAS_DIR) if MUSICAS_DIR.exists() else "",
         )
 
         # Copia para pasta output permanente
