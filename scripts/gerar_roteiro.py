@@ -127,15 +127,19 @@ Com base no tema acima, crie o roteiro completo seguindo todas as regras do sist
 IMPORTANTE: Retorne APENAS um JSON válido com esta estrutura exata (sem markdown, sem texto extra):
 {{
     "titulo": "TÍTULO EM MAIÚSCULAS — impactante e curto (máx 55 chars)",
-    "roteiro_fala": "Texto completo da narração. Frases curtas separadas por ponto. 130-170 palavras. Comece com o gancho forte.",
+    "roteiro_fala": "Texto completo da narração. Frases curtas separadas por ponto. 100-140 palavras. Comece com o gancho forte.",
     "palavras_chave_pexels": ["english keyword 1", "english keyword 2", "english keyword 3", "english keyword 4"],
-    "hashtags": "#reflexao #verdade #autoconhecimento #crescimento #motivacao"
+    "hashtags_tema": ["#palavrachave1", "#palavrachave2", "#palavrachave3"]
 }}
 
 Para palavras_chave_pexels, use termos em INGLÊS que combinem com o tema visualmente:
 - Exemplos: "lonely wolf forest", "person walking alone road", "rainy night city", "dark ocean waves", "misty mountain fog", "silhouette sunset", "empty road fog"
 - Escolha os que melhor combinam com a emoção do roteiro
-- Exatamente 4 palavras-chave"""
+- Exatamente 4 palavras-chave
+
+Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem acentos, letras minúsculas) que representem as palavras-chave emocionais DESTE roteiro específico.
+- Exemplos: #traicao #amizadefalsa #abandono #solidao #superacao #maturidade #autoestima #silencio #limites
+- Use palavras que descrevem o TEMA central do roteiro, não genéricas como #reflexao ou #motivacao"""
 
     print("Chamando API Groq para gerar roteiro...")
     response = client.chat.completions.create(
@@ -152,10 +156,20 @@ Para palavras_chave_pexels, use termos em INGLÊS que combinem com o tema visual
     result = json.loads(response.choices[0].message.content)
     result["tema"] = tema
 
+    # Garante compatibilidade: monta o campo 'hashtags' a partir de hashtags_tema + fixas
+    hashtags_tema = result.get("hashtags_tema", [])
+    if isinstance(hashtags_tema, list) and hashtags_tema:
+        # 3 keywords do roteiro + 2 hashtags fixas obrigatórias
+        hashtags_str = " ".join(hashtags_tema[:3]) + " #videoparastatus #reflexao"
+    else:
+        hashtags_str = "#videoparastatus #reflexao"
+    result["hashtags"] = hashtags_str
+
     print(f"Titulo: {result['titulo']}")
     palavras = len(result['roteiro_fala'].split())
     print(f"Roteiro ({palavras} palavras): {result['roteiro_fala'][:80]}...")
     print(f"Keywords Pexels: {result['palavras_chave_pexels']}")
+    print(f"Hashtags: {result['hashtags']}")
 
     return result
 

@@ -233,10 +233,15 @@ def montar_video(
     work = Path(work_dir)
 
     # ── 1. Duração do áudio ───────────────────────────────────────────────────
+    # [FIX-8] Usa ffprobe diretamente no arquivo MP3 — mais preciso que os timings
+    # do Whisper, que frequentemente subestima a última palavra/sílaba.
     duracao_audio = get_media_duration(audio_file)
-    print(f"\nDuracao do audio: {duracao_audio:.1f}s")
+    # Adiciona margem de 2s para garantir que o vídeo nunca corte antes do áudio
+    MARGEM_FINAL = 2.0
+    duracao_audio_com_margem = duracao_audio + MARGEM_FINAL
+    print(f"\nDuracao do audio: {duracao_audio:.1f}s (+{MARGEM_FINAL}s margem = {duracao_audio_com_margem:.1f}s total)")
 
-    duracao_pexels_necessaria = max(1.0, duracao_audio - SHELBY_CLIP_DURATION)
+    duracao_pexels_necessaria = max(1.0, duracao_audio_com_margem - SHELBY_CLIP_DURATION)
     duracao_total = SHELBY_CLIP_DURATION + duracao_pexels_necessaria
     print(f"Duracao total do video: {duracao_total:.1f}s")
 
