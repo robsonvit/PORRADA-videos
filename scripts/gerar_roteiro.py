@@ -67,10 +67,9 @@ ESTRUTURA OBRIGATÓRIA:
 
 ESTILO: Frases curtas, pausas naturais, perguntas retóricas, intensidade emocional. Escreva como alguém contando uma verdade que aprendeu depois de sofrer. Use "você", "a gente", "pra", "tá". NÃO escreva como IA.
 
-LINGUAGEM: Este roteiro é narrado por uma voz no estilo Thomas Shelby — bruto, direto, sem filtro e sem medo de palavrão. Use palavrões de forma NATURAL e PODEROSA, como parte da frase de impacto, nunca como enchimento. Palavrões permitidos e recomendados:
-- Porra, Caralho, Cacete, Merdas, Bosta, Babaca, Viado (no sentido de covarde), Filha da puta, Porra-louca, Fdp, Caralhada, Desgraça, Merda, Droga, Vai se foder, Arrombado, Buceta (como espanto), Pica (como intensidade), Inferno
-- Pode criar combinações criativas e originais, como "Que porra de amizade é essa?", "Caralho, como demora pra gente enxergar.", "Que bosta de relação foi essa."
-- Use com inteligência: o palavrão deve FORTALECER a frase, não sujar ela.
+LINGUAGEM: Este roteiro é narrado por uma voz no estilo Thomas Shelby — bruto, direto e sem filtro. Use um palavrão de forma NATURAL e PODEROSA APENAS no gancho inicial para chamar a atenção. No restante do texto, mantenha o tom sério e bruto, mas SEM palavrões.
+- Exemplos de palavrões para o gancho: Porra, Caralho, Cacete, Merda, Bosta, Babaca, Filha da puta, Desgraça.
+- O palavrão deve FORTALECER a primeira frase, como um desabafo sincero.
 
 REGRAS:
 1. Não copie nenhum roteiro existente
@@ -79,11 +78,11 @@ REGRAS:
 4. Não encha de metáforas
 5. Não faça introdução desnecessária
 6. Priorize identificação emocional
-7. O gancho OBRIGATORIAMENTE deve conter um palavrão forte — é a primeira coisa que o ouvinte escuta
-8. A última frase antes do CTA deve ser memorável
-9. Use pelo menos 2 a 3 palavrões distribuídos ao longo do roteiro
+7. O gancho OBRIGATORIAMENTE deve conter UM palavrão forte — é a primeira coisa que o ouvinte escuta.
+8. NÃO coloque palavrões no resto do roteiro, apenas na primeira frase.
+9. A última frase antes do CTA deve ser memorável
 
-COMPRIMENTO: 130 a 170 palavras de narração."""
+COMPRIMENTO: 100 a 140 palavras de narração."""
 
 # ── Controle de temas ─────────────────────────────────────────────────────────
 def carregar_temas_usados() -> list:
