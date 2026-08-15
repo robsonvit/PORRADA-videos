@@ -6,6 +6,9 @@ Correções aplicadas:
   [FIX-2] Frame freeze: fps=30 + setpts=PTS-STARTPTS em todos os clips antes do concat
   [FIX-3] Legenda embolada: escape seguro via re.sub + pausa mínima 0.6s por bloco
   [FIX-4] Voz rápida: tempo mínimo por bloco aumentado para 0.6s
+  [FIX-5] Volume voz 110%, música 20%
+  [FIX-6] Legendas sem sobreposição: fim de cada bloco limitado ao início do próximo
+  [FIX-7] Vinheta escura nos clips Pexels para destacar legendas
 """
 
 import json
@@ -122,14 +125,24 @@ def gerar_filtro_legendas(word_timings: list, font_file: str) -> str:
         grupos.append(grupo_atual)
 
     # ── Gera um filtro drawtext por bloco ────────────────────────────────────
-    filtros = []
+    # [FIX-6] Calcula o inicio do proximo bloco para limitar o fim do atual
+    blocos_raw = []
     for grupo in grupos:
         inicio = grupo[0]["start"]
         fim    = grupo[-1]["start"] + grupo[-1]["duration"]
-
-        # [FIX-3] Mínimo 0.6s de exibição para não piscar
         if fim - inicio < 0.60:
             fim = inicio + 0.60
+        blocos_raw.append((inicio, fim, grupo))
+
+    filtros = []
+    for i, (inicio, fim, grupo) in enumerate(blocos_raw):
+        # [FIX-6] Garante que fim não ultrapassa o início do próximo bloco
+        if i + 1 < len(blocos_raw):
+            proximo_inicio = blocos_raw[i + 1][0]
+            fim = min(fim, proximo_inicio - 0.01)  # 10ms de margem
+
+        if fim <= inicio:
+            fim = inicio + 0.40  # fallback mínimo
 
         # [FIX-1] Limpa pontuação de cada palavra antes de exibir
         palavras_limpas = [_limpar_palavra(w["word"]) for w in grupo]
@@ -168,21 +181,28 @@ def processar_clip_vertical(
     output_path: str,
     duracao: float,
     aplicar_hflip: bool = False,
+    aplicar_vinheta: bool = False,
 ) -> None:
     """
     Converte clipe para formato vertical 1080x1920.
 
     [FIX-2] fps=30 ANTES de qualquer outro filtro → elimina congelamentos
     [FIX-2] setpts=PTS-STARTPTS → reseta timestamps para evitar descontinuidades
+    [FIX-7] aplicar_vinheta: adiciona vinheta escura radial para destacar legendas
     """
     hflip_str = "hflip," if aplicar_hflip else ""
+    # [FIX-7] Vinheta escura: overlay radial que escurece as bordas
+    # vignette=PI/4 cria uma vinheta suave de ~45 graus de abertura
+    vinheta_str = "vignette=PI/4:eval=init," if aplicar_vinheta else ""
     vf = (
         f"fps={VIDEO_FPS},"               # [FIX-2] Normaliza FPS PRIMEIRO
         f"{hflip_str}"
         f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
         f"setsar=1,"
-        f"setpts=PTS-STARTPTS"            # [FIX-2] Reseta timestamps
+        f"setpts=PTS-STARTPTS,"           # [FIX-2] Reseta timestamps
+        f"{vinheta_str}"
+        f"eq=brightness=-0.12:contrast=1.05"  # [FIX-7] Escurece levemente o frame inteiro
     )
     run_ffmpeg([
         "-i", input_path,
@@ -242,7 +262,11 @@ def montar_video(
             break
 
         out_clip = str(work / f"pexels_{idx:02d}.mp4")
-        processar_clip_vertical(clip_orig, out_clip, dur_clip, aplicar_hflip=True)
+        processar_clip_vertical(
+            clip_orig, out_clip, dur_clip,
+            aplicar_hflip=True,
+            aplicar_vinheta=True,   # [FIX-7] Vinheta escura nos clips Pexels
+        )
         pexels_processados.append(out_clip)
         acumulado += dur_clip
         idx += 1
@@ -302,29 +326,31 @@ def montar_video(
         f"[vmain][vblur]blend=all_mode=screen:all_opacity=0.12[vout]"
     )
 
-    # ── Monta áudio: narração pura OU narração + fundo 30% ────────────────────
+    # ── Monta áudio: narração pura OU narração + fundo 20% ────────────────────
+    # [FIX-5] Voz em 110% (Fish Audio é baixinho), música em 20%
     if musica_escolhida:
-        print("Mixando narração + música de fundo (30%)...")
+        print("Mixando narracao + musica de fundo (voz 110%, fundo 20%)...")
         ffmpeg_inputs = [
             "-i", video_concat,
             "-i", audio_file,
             "-i", musica_escolhida,
         ]
-        # amix: voz em 100%, música em 30%. duration=first → corta na duração da narração
+        # amix: voz em 110%, música em 20%. duration=first → corta na narração
         audio_filter = (
-            "[1:a]volume=1.0[voz];"
-            "[2:a]volume=0.30,atrim=duration=" + str(duracao_total) + "[bgm];"
+            "[1:a]volume=1.10[voz];"
+            "[2:a]volume=0.20,atrim=duration=" + str(duracao_total) + "[bgm];"
             "[voz][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]"
         )
         filter_final = filter_complex + f";{audio_filter}"
         audio_map = ["-map", "[aout]"]
     else:
+        # Sem música: ainda aplica 110% de volume na voz
         ffmpeg_inputs = [
             "-i", video_concat,
             "-i", audio_file,
         ]
-        filter_final = filter_complex
-        audio_map = ["-map", "1:a"]
+        filter_final = filter_complex + ";[1:a]volume=1.10[aout]"
+        audio_map = ["-map", "[aout]"]
 
     print("Renderizando video final com audio + legendas + efeitos...")
     run_ffmpeg(
