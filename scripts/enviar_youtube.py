@@ -12,18 +12,25 @@ CREDENTIALS_FILE = PROJETO_ROOT / "youtube_credentials.json"
 
 
 def obter_access_token() -> str:
-    if not CREDENTIALS_FILE.exists():
-        raise FileNotFoundError(f"Arquivo de credenciais não encontrado: {CREDENTIALS_FILE}")
-    
-    with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
-        creds = json.load(f)
-        
-    client_id = creds.get("client_id")
-    client_secret = creds.get("client_secret")
-    refresh_token = creds.get("refresh_token")
-    
+    # Tenta pegar das variáveis de ambiente primeiro (para GitHub Actions)
+    client_id = os.environ.get("YOUTUBE_CLIENT_ID")
+    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+
     if not all([client_id, client_secret, refresh_token]):
-        raise ValueError("Credenciais incompletas no arquivo youtube_credentials.json")
+        # Fallback para o arquivo local se não estiver no ambiente
+        if not CREDENTIALS_FILE.exists():
+            raise FileNotFoundError(f"Arquivo de credenciais não encontrado e variáveis de ambiente não configuradas: {CREDENTIALS_FILE}")
+        
+        with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+            creds = json.load(f)
+            
+        client_id = creds.get("client_id")
+        client_secret = creds.get("client_secret")
+        refresh_token = creds.get("refresh_token")
+        
+        if not all([client_id, client_secret, refresh_token]):
+            raise ValueError("Credenciais incompletas no arquivo youtube_credentials.json")
 
     resp = requests.post(YT_TOKEN_URL, data={
         "client_id": client_id,
