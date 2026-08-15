@@ -89,6 +89,7 @@ jobs:
       # ── 6. Pipeline de vídeo ──────────────────────────────────────────────
       - name: 🚀 Executar pipeline de vídeo
         env:
+          FISH_API_KEY:         ${{ secrets.FISH_API_KEY }}
           GROK_API_KEY:         ${{ secrets.GROK_API_KEY }}
           PEXELS_API_KEY:       ${{ secrets.PEXELS_API_KEY }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
