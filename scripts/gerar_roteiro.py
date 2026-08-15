@@ -67,6 +67,11 @@ ESTRUTURA OBRIGATÓRIA:
 
 ESTILO: Frases curtas, pausas naturais, perguntas retóricas, intensidade emocional. Escreva como alguém contando uma verdade que aprendeu depois de sofrer. Use "você", "a gente", "pra", "tá". NÃO escreva como IA.
 
+LINGUAGEM: Este roteiro é narrado por uma voz no estilo Thomas Shelby — bruto, direto, sem filtro e sem medo de palavrão. Use palavrões de forma NATURAL e PODEROSA, como parte da frase de impacto, nunca como enchimento. Palavrões permitidos e recomendados:
+- Porra, Caralho, Cacete, Merdas, Bosta, Babaca, Viado (no sentido de covarde), Filha da puta, Porra-louca, Fdp, Caralhada, Desgraça, Merda, Droga, Vai se foder, Arrombado, Buceta (como espanto), Pica (como intensidade), Inferno
+- Pode criar combinações criativas e originais, como "Que porra de amizade é essa?", "Caralho, como demora pra gente enxergar.", "Que bosta de relação foi essa."
+- Use com inteligência: o palavrão deve FORTALECER a frase, não sujar ela.
+
 REGRAS:
 1. Não copie nenhum roteiro existente
 2. Não use clichês excessivamente conhecidos
@@ -74,8 +79,9 @@ REGRAS:
 4. Não encha de metáforas
 5. Não faça introdução desnecessária
 6. Priorize identificação emocional
-7. O gancho precisa ser forte nos primeiros segundos
+7. O gancho OBRIGATORIAMENTE deve conter um palavrão forte — é a primeira coisa que o ouvinte escuta
 8. A última frase antes do CTA deve ser memorável
+9. Use pelo menos 2 a 3 palavrões distribuídos ao longo do roteiro
 
 COMPRIMENTO: 130 a 170 palavras de narração."""
 
