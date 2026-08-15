@@ -27,6 +27,7 @@ from gerar_voz import gerar_voz, calcular_duracao_audio
 from buscar_videos_pexels import buscar_videos
 from montar_video import montar_video, get_media_duration, SHELBY_CLIP_DURATION
 from enviar_telegram import enviar_video_telegram, enviar_mensagem_telegram
+from enviar_youtube import enviar_video_youtube
 
 # ── Paths do projeto ──────────────────────────────────────────────────────────
 PROJETO_ROOT = Path(__file__).parent.parent
@@ -126,13 +127,31 @@ def executar_pipeline(numero: int = 1) -> bool:
         output_final = str(OUTPUT_DIR / Path(output_file).name)
         shutil.copy2(output_file, output_final)
 
-        # ── Passo 6: Envia ao Telegram ────────────────────────────────────
-        print("\n📨 [6/6] Enviando ao Telegram...")
+        # ── Passo 6: Envia ao Telegram e YouTube ──────────────────────────
+        print("\n📨 [6/7] Enviando ao Telegram...")
         caption = (
             f"🔥 <b>{roteiro['titulo']}</b>\n\n"
             f"{roteiro['hashtags']}"
         )
         enviar_video_telegram(output_final, caption)
+
+        print("\n▶️ [7/7] Enviando ao YouTube (Shorts)...")
+        yt_titulo = f"{roteiro['titulo'][:85]} #shorts"
+        yt_desc = f"{roteiro['titulo']}\n\n{roteiro['hashtags']}"
+        yt_tags = [tag.strip("#") for tag in roteiro['hashtags'].split() if tag.startswith("#")]
+        
+        try:
+            yt_url = enviar_video_youtube(
+                video_path=output_final,
+                titulo=yt_titulo,
+                descricao=yt_desc,
+                tags=yt_tags
+            )
+            print(f"  📺 Vídeo postado no YouTube: {yt_url}")
+            enviar_mensagem_telegram(f"✅ <b>Vídeo postado no YouTube!</b>\n{yt_url}")
+        except Exception as yt_err:
+            print(f"  ❌ Erro ao enviar para o YouTube: {yt_err}")
+            enviar_mensagem_telegram(f"⚠️ Erro ao postar no YouTube:\n<code>{yt_err}</code>")
 
         # ── Salva o tema usado ────────────────────────────────────────────
         salvar_tema_usado(tema)
