@@ -49,11 +49,11 @@ def _gerar_audio_fish(texto: str, output_mp3: str) -> float:
     headers = {
         "Authorization": f"Bearer {FISH_API_KEY}",
         "Content-Type": "application/json",
+        "model": FISH_MODEL,
     }
     payload = {
         "text": texto,
         "reference_id": FISH_VOICE_ID,
-        "model": FISH_MODEL,
         "format": "mp3",
         "mp3_bitrate": 192,
         "normalize": True,
