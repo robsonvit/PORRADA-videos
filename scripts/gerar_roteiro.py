@@ -130,7 +130,11 @@ def gerar_roteiro(tema: str) -> dict:
 
 Com base no tema acima, crie o roteiro completo seguindo todas as regras do sistema.
 
-IMPORTANTE: Retorne APENAS um JSON válido com esta estrutura exata (sem markdown, sem texto extra):
+CRÍTICO E OBRIGATÓRIO: VOCÊ DEVE RETORNAR APENAS E EXCLUSIVAMENTE O OBJETO JSON. 
+NÃO ESCREVA NENHUMA PALAVRA ANTES OU DEPOIS. NÃO ESCREVA RACIOCÍNIOS NEM EXPLICAÇÕES.
+SUA RESPOSTA INTEIRA DEVE COMEÇAR COM A CHAVE E TERMINAR COM A CHAVE.
+
+Retorne APENAS um JSON válido com esta estrutura exata (sem markdown, sem texto extra):
 {{
     "titulo": "TÍTULO EM MAIÚSCULAS — impactante e curto (máx 55 chars)",
     "roteiro_fala": "Texto completo da narração. Frases curtas separadas por ponto. 100-140 palavras. Comece com o gancho forte.",
@@ -162,7 +166,6 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
         temperature=0.7,
         max_tokens=1500,
     )
