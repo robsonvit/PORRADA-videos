@@ -9,6 +9,7 @@ import os
 import json
 import random
 import sys
+import re
 from pathlib import Path
 from openai import OpenAI
 
@@ -153,12 +154,15 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
         temperature=0.88,
         max_tokens=1200,
     )
 
-    result = json.loads(response.choices[0].message.content)
+    content = response.choices[0].message.content
+    match = re.search(r'\{.*\}', content, re.DOTALL)
+    if match:
+        content = match.group(0)
+    result = json.loads(content)
     result["tema"] = tema
 
     # Garante compatibilidade: monta o campo 'hashtags' a partir de hashtags_tema + fixas
