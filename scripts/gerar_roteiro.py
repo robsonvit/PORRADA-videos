@@ -149,20 +149,26 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 
     print("Chamando API Groq para gerar roteiro...")
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
+        response_format={"type": "json_object"},
         temperature=0.88,
         max_tokens=1200,
     )
 
     content = response.choices[0].message.content
-    match = re.search(r'\{.*\}', content, re.DOTALL)
-    if match:
-        content = match.group(0)
-    result = json.loads(content)
+    try:
+        result = json.loads(content)
+    except:
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            result = json.loads(match.group(0))
+        else:
+            raise ValueError("Não retornou JSON válido")
+            
     result["tema"] = tema
 
     # Garante compatibilidade: monta o campo 'hashtags' a partir de hashtags_tema + fixas
