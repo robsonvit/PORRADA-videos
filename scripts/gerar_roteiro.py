@@ -157,25 +157,29 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
         print("Erro buscando modelos:", e)
 
     response = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model="openai/gpt-oss-20b",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
-        temperature=0.88,
-        max_tokens=1200,
+        temperature=0.7,
+        max_tokens=1500,
     )
 
     content = response.choices[0].message.content
+    print("RESPOSTA CRUA DO MODELO:")
+    print(content)
     try:
         result = json.loads(content)
     except:
         match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
-            result = json.loads(match.group(0))
+            try:
+                result = json.loads(match.group(0))
+            except Exception as inner_e:
+                raise ValueError(f"Não retornou JSON válido no match. Erro: {inner_e}")
         else:
-            raise ValueError("Não retornou JSON válido")
+            raise ValueError("Não encontrou chaves no texto retornado")
             
     result["tema"] = tema
 
