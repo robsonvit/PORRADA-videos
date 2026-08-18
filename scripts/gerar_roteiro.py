@@ -162,6 +162,7 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
+        response_format={"type": "json_object"},
         temperature=0.7,
         max_tokens=1500,
     )
