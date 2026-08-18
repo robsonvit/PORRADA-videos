@@ -148,8 +148,16 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 - Use palavras que descrevem o TEMA central do roteiro, não genéricas como #reflexao ou #motivacao"""
 
     print("Chamando API Groq para gerar roteiro...")
+    try:
+        import requests
+        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {os.environ.get('GROK_API_KEY')}"})
+        print("MODELOS DISPONÍVEIS NA GROQ:")
+        print(r.json())
+    except Exception as e:
+        print("Erro buscando modelos:", e)
+
     response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="llama3-8b-8192",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
