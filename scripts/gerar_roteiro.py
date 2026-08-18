@@ -157,7 +157,7 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
         print("Erro buscando modelos:", e)
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model="qwen/qwen3.6-27b",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
