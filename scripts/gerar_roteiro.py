@@ -198,13 +198,16 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 
     print("Chamando API Groq para gerar roteiro...")
 
-    # Tenta primeiro com llama (sem thinking), fallback para qwen com extrator robusto
+    # Estratégia de modelos: Qwen3 com reasoning_format=hidden (esconde thinking),
+    # fallback para modelos sem thinking
     modelos_tentativa = [
-        ("llama-3.3-70b-versatile", {}),
-        ("qwen/qwen3.6-27b", {}),
+        ("qwen/qwen3.6-27b", {"extra_body": {"reasoning_format": "hidden"}}),
+        ("llama3-70b-8192", {}),
+        ("mixtral-8x7b-32768", {}),
     ]
 
     last_error = None
+    result = None
     for modelo, extra_params in modelos_tentativa:
         try:
             print(f"  Tentando modelo: {modelo}...")
@@ -215,12 +218,15 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4000,  # Alto o suficiente para thinking + resposta
                 **extra_params,
             )
 
-            content = response.choices[0].message.content
-            print(f"  Resposta ({modelo}): {content[:300]}...")
+            content = response.choices[0].message.content or ""
+            print(f"  Resposta ({modelo}): {content[:200]}...")
+
+            if not content.strip():
+                raise ValueError(f"Modelo {modelo} retornou conteúdo vazio")
 
             result = _extrair_json(content)
             print(f"  ✅ JSON extraído com sucesso via {modelo}")
@@ -230,7 +236,8 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             print(f"  ⚠️ Falhou com {modelo}: {e}")
             last_error = e
             continue
-    else:
+
+    if result is None:
         raise ValueError(f"Todos os modelos falharam. Último erro: {last_error}")
             
     result["tema"] = tema
