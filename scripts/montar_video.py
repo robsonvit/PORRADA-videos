@@ -8,7 +8,6 @@ Correções aplicadas:
   [FIX-4] Voz rápida: tempo mínimo por bloco aumentado para 0.6s
   [FIX-5] Volume voz 110%, música 20%
   [FIX-6] Legendas sem sobreposição: fim de cada bloco limitado ao início do próximo
-  [FIX-7] Vinheta escura nos clips Pexels para destacar legendas
 """
 
 import json
@@ -39,7 +38,7 @@ def get_media_duration(filepath: str) -> float:
         "-print_format", "json",
         "-show_streams", filepath,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
     data = json.loads(result.stdout)
     for stream in data.get("streams", []):
         if "duration" in stream:
@@ -52,9 +51,10 @@ def run_ffmpeg(args: list, description: str = "") -> None:
     if description:
         print(f"  [FFmpeg] {description}...")
     cmd = ["ffmpeg", "-y"] + args
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
-        print(f"  ERRO FFmpeg:\n{result.stderr[-3000:]}")
+        stderr_text = result.stderr[-3000:] if result.stderr else "Sem output de erro."
+        print(f"  ERRO FFmpeg:\n{stderr_text}")
         raise RuntimeError(f"FFmpeg falhou: {description}")
 
 
@@ -181,28 +181,21 @@ def processar_clip_vertical(
     output_path: str,
     duracao: float,
     aplicar_hflip: bool = False,
-    aplicar_vinheta: bool = False,
 ) -> None:
     """
     Converte clipe para formato vertical 1080x1920.
 
     [FIX-2] fps=30 ANTES de qualquer outro filtro → elimina congelamentos
     [FIX-2] setpts=PTS-STARTPTS → reseta timestamps para evitar descontinuidades
-    [FIX-7] aplicar_vinheta: adiciona vinheta escura radial para destacar legendas
     """
     hflip_str = "hflip," if aplicar_hflip else ""
-    # [FIX-7] Vinheta escura: overlay radial que escurece as bordas
-    # vignette=PI/4 cria uma vinheta suave de ~45 graus de abertura
-    vinheta_str = "vignette=PI/4:eval=init," if aplicar_vinheta else ""
     vf = (
         f"fps={VIDEO_FPS},"               # [FIX-2] Normaliza FPS PRIMEIRO
         f"{hflip_str}"
         f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
         f"setsar=1,"
-        f"setpts=PTS-STARTPTS,"           # [FIX-2] Reseta timestamps
-        f"{vinheta_str}"
-        f"eq=brightness=-0.12:contrast=1.05"  # [FIX-7] Escurece levemente o frame inteiro
+        f"setpts=PTS-STARTPTS"            # [FIX-2] Reseta timestamps
     )
     run_ffmpeg([
         "-i", input_path,
@@ -270,7 +263,6 @@ def montar_video(
         processar_clip_vertical(
             clip_orig, out_clip, dur_clip,
             aplicar_hflip=True,
-            aplicar_vinheta=True,   # [FIX-7] Vinheta escura nos clips Pexels
         )
         pexels_processados.append(out_clip)
         acumulado += dur_clip

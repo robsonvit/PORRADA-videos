@@ -19,6 +19,10 @@ import re
 import tempfile
 import traceback
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # ── Adiciona o diretório de scripts ao path ───────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
@@ -57,7 +61,7 @@ def executar_pipeline(numero: int = 1) -> bool:
 
     try:
         # ── Passo 1: Escolhe tema e gera roteiro ──────────────────────────
-        print("\n📝 [1/6] Gerando roteiro via Grok...")
+        print("\n📝 [1/6] Gerando roteiro via OpenRouter...")
         tema = escolher_tema()
         roteiro = gerar_roteiro(tema)
 

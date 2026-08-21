@@ -112,7 +112,7 @@ def _extrair_timestamps_groq(audio_path: str) -> list:
     """Extrai timestamps palavra a palavra via Groq Whisper API."""
     print("  Extraindo timestamps via Groq Whisper...")
     client = OpenAI(
-        api_key=os.environ["GROK_API_KEY"],
+        api_key=os.environ["GROQ_API_KEY"],
         base_url="https://api.groq.com/openai/v1",
     )
 
