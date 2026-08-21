@@ -107,19 +107,19 @@ def _gerar_audio_kokoro(texto: str, output_wav: str) -> float:
     return duracao
 
 
-# ── Etapa 2: Timestamps via Groq Whisper ─────────────────────────────────────
-def _extrair_timestamps_groq(audio_path: str) -> list:
-    """Extrai timestamps palavra a palavra via Groq Whisper API."""
-    print("  Extraindo timestamps via Groq Whisper...")
+# ── Etapa 2: Timestamps via OpenRouter (Whisper) ───────────────────────────────
+def _extrair_timestamps_openrouter(audio_path: str) -> list:
+    """Extrai timestamps palavra a palavra via OpenRouter Whisper API."""
+    print("  Extraindo timestamps via OpenRouter Whisper...")
     client = OpenAI(
-        api_key=os.environ["GROQ_API_KEY"],
-        base_url="https://api.groq.com/openai/v1",
+        api_key=os.environ["OPENROUTER_API_KEY"],
+        base_url="https://openrouter.ai/api/v1",
     )
 
     with open(audio_path, "rb") as audio_file:
         transcription = client.audio.transcriptions.create(
             file=audio_file,
-            model="whisper-large-v3",
+            model="openai/whisper-1",
             response_format="verbose_json",
             timestamp_granularities=["word"],
         )
@@ -132,7 +132,7 @@ def _extrair_timestamps_groq(audio_path: str) -> list:
 
     words = t_data.get("words", [])
     if not words:
-        raise RuntimeError("Nenhuma palavra retornada pelo Groq Whisper")
+        raise RuntimeError("Nenhuma palavra retornada pelo OpenRouter Whisper")
 
     for w in words:
         timings.append({
@@ -152,7 +152,7 @@ def gerar_voz(texto: str, output_audio: str, output_timing: str) -> list:
     1º Tenta Fish Audio API (s2.1-pro-free, voz clonada)
        → Se falhar, usa Kokoro local (pm_santa, PT-BR)
     2. Qualquer que seja a fonte, converte para MP3 se necessário
-    3. Groq Whisper extrai timestamps precisos
+    3. OpenRouter Whisper extrai timestamps precisos
     """
     work = Path(output_audio).parent
     fonte_usada = "?"
@@ -180,8 +180,8 @@ def gerar_voz(texto: str, output_audio: str, output_timing: str) -> list:
         Path(wav_temp).unlink(missing_ok=True)
         fonte_usada = f"Kokoro FALLBACK ({KOKORO_VOICE})"
 
-    # ── Timestamps via Groq ───────────────────────────────────────────────────
-    timings = _extrair_timestamps_groq(output_audio)
+    # ── Timestamps via OpenRouter ─────────────────────────────────────────────
+    timings = _extrair_timestamps_openrouter(output_audio)
 
     with open(output_timing, "w", encoding="utf-8") as f:
         json.dump(timings, f, ensure_ascii=False, indent=2)
@@ -204,7 +204,7 @@ def calcular_duracao_audio(timing_file: str) -> float:
 # ── Teste standalone ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if "--test" in sys.argv:
-        print("Teste de geração de voz: Fish Audio → (fallback) Kokoro + Groq Whisper")
+        print("Teste de geração de voz: Fish Audio → (fallback) Kokoro + OpenRouter Whisper")
         texto_teste = (
             "Tem pessoas que somem da sua vida exatamente quando você mais precisa. "
             "Isso não é coincidência. Isso é quem elas sempre foram. "
