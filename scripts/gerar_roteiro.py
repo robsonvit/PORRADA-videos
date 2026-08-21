@@ -198,34 +198,42 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 
     print("Chamando API Groq para gerar roteiro...")
 
-    # Estratégia de modelos: Qwen3 com reasoning_format=hidden (esconde thinking),
-    # fallback para modelos sem thinking
-    modelos_tentativa = [
-        ("qwen/qwen3.6-27b", {"extra_body": {"reasoning_format": "hidden"}}),
-        ("llama3-70b-8192", {}),
-        ("mixtral-8x7b-32768", {}),
+    # Modelos ativos na Groq (agosto 2026) — tenta em ordem de preferência
+    MODELOS = [
+        "qwen/qwen3.6-27b",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "openai/gpt-oss-20b",
     ]
 
     last_error = None
     result = None
-    for modelo, extra_params in modelos_tentativa:
+
+    for modelo in MODELOS:
         try:
             print(f"  Tentando modelo: {modelo}...")
-            response = client.chat.completions.create(
+
+            # Para modelos de reasoning (Qwen3), usa reasoning_format=hidden
+            # para descartar o thinking e obter só a resposta no content
+            usa_reasoning = "qwen" in modelo.lower()
+
+            call_kwargs = dict(
                 model=modelo,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
-                max_tokens=4000,  # Alto o suficiente para thinking + resposta
-                **extra_params,
+                max_tokens=4000,
             )
+            if usa_reasoning:
+                call_kwargs["extra_body"] = {"reasoning_format": "hidden"}
 
-            content = response.choices[0].message.content or ""
+            response = client.chat.completions.create(**call_kwargs)
+
+            content = (response.choices[0].message.content or "").strip()
             print(f"  Resposta ({modelo}): {content[:200]}...")
 
-            if not content.strip():
+            if not content:
                 raise ValueError(f"Modelo {modelo} retornou conteúdo vazio")
 
             result = _extrair_json(content)
