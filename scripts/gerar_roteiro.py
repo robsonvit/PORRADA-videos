@@ -198,22 +198,40 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 
     print("Chamando API Groq para gerar roteiro...")
 
-    response = client.chat.completions.create(
-        model="qwen/qwen3.6-27b",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.7,
-        max_tokens=2000,
-        extra_body={"enable_thinking": False},  # Desativa modo thinking do Qwen3
-    )
+    # Tenta primeiro com llama (sem thinking), fallback para qwen com extrator robusto
+    modelos_tentativa = [
+        ("llama-3.3-70b-versatile", {}),
+        ("qwen/qwen3.6-27b", {}),
+    ]
 
-    content = response.choices[0].message.content
-    print("RESPOSTA CRUA DO MODELO:")
-    print(content[:500])  # Loga só os primeiros 500 chars para não poluir
+    last_error = None
+    for modelo, extra_params in modelos_tentativa:
+        try:
+            print(f"  Tentando modelo: {modelo}...")
+            response = client.chat.completions.create(
+                model=modelo,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                **extra_params,
+            )
 
-    result = _extrair_json(content)
+            content = response.choices[0].message.content
+            print(f"  Resposta ({modelo}): {content[:300]}...")
+
+            result = _extrair_json(content)
+            print(f"  ✅ JSON extraído com sucesso via {modelo}")
+            break
+
+        except Exception as e:
+            print(f"  ⚠️ Falhou com {modelo}: {e}")
+            last_error = e
+            continue
+    else:
+        raise ValueError(f"Todos os modelos falharam. Último erro: {last_error}")
             
     result["tema"] = tema
 
