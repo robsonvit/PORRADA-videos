@@ -5,16 +5,23 @@ Sintetiza narração com estratégia dupla:
   PRIMÁRIA  → Fish Audio API (modelo s2.1-pro-free, voz clonada 86f23b65...)
   FALLBACK  → Kokoro TTS local (pm_santa, PT-BR) — usado se o Fish falhar
 
-Após gerar o áudio (de qualquer uma das fontes), o Groq Whisper extrai
+Após gerar o áudio (de qualquer uma das fontes), o faster-whisper extrai
 os timestamps palavra a palavra para garantir precisão nas legendas.
 """
 
-import os
-import json
-import time
-import subprocess
 import sys
+import json
+import re
+import subprocess
+import os
 from pathlib import Path
+
+# Tentativa de carregar faster-whisper (para timestamps grátis)
+try:
+    from faster_whisper import WhisperModel
+    HAVE_FASTER_WHISPER = True
+except ImportError:
+    HAVE_FASTER_WHISPER = False
 
 import soundfile as sf
 import requests
@@ -107,39 +114,34 @@ def _gerar_audio_kokoro(texto: str, output_wav: str) -> float:
     return duracao
 
 
-# ── Etapa 2: Timestamps via OpenRouter (Whisper) ───────────────────────────────
-def _extrair_timestamps_openrouter(audio_path: str) -> list:
-    """Extrai timestamps palavra a palavra via OpenRouter Whisper API."""
-    print("  Extraindo timestamps via OpenRouter Whisper...")
-    client = OpenAI(
-        api_key=os.environ["OPENROUTER_API_KEY"],
-        base_url="https://openrouter.ai/api/v1",
-    )
+# ── Etapa 2: Timestamps via faster-whisper (Local & Gratuito) ───────────────
+def _extrair_timestamps_local(audio_path: str) -> list:
+    """Extrai timestamps palavra a palavra usando faster-whisper localmente na CPU."""
+    print("  Extraindo timestamps via faster-whisper (Local CPU)...")
+    if not HAVE_FASTER_WHISPER:
+        raise RuntimeError("faster-whisper não está instalado. Adicione ao requirements.txt!")
 
-    with open(audio_path, "rb") as audio_file:
-        transcription = client.audio.transcriptions.create(
-            file=audio_file,
-            model="openai/whisper-1",
-            response_format="verbose_json",
-            timestamp_granularities=["word"],
-        )
-
+    # Usa modelo base na CPU (rápido e leve o suficiente para legendas)
+    model = WhisperModel("base", device="cpu", compute_type="int8")
+    
+    segments, info = model.transcribe(audio_path, word_timestamps=True)
+    
     timings = []
-    try:
-        t_data = transcription.model_dump()
-    except AttributeError:
-        t_data = transcription if isinstance(transcription, dict) else vars(transcription)
+    for segment in segments:
+        for word in segment.words:
+            # Pula espaços em branco ou vazios
+            word_text = word.word.strip()
+            if not word_text:
+                continue
+                
+            timings.append({
+                "word": word_text,
+                "start": word.start,
+                "duration": word.end - word.start,
+            })
 
-    words = t_data.get("words", [])
-    if not words:
-        raise RuntimeError("Nenhuma palavra retornada pelo OpenRouter Whisper")
-
-    for w in words:
-        timings.append({
-            "word": w["word"],
-            "start": w["start"],
-            "duration": w["end"] - w["start"],
-        })
+    if not timings:
+        raise RuntimeError("Nenhuma palavra retornada pelo faster-whisper.")
 
     return timings
 
@@ -152,7 +154,7 @@ def gerar_voz(texto: str, output_audio: str, output_timing: str) -> list:
     1º Tenta Fish Audio API (s2.1-pro-free, voz clonada)
        → Se falhar, usa Kokoro local (pm_santa, PT-BR)
     2. Qualquer que seja a fonte, converte para MP3 se necessário
-    3. OpenRouter Whisper extrai timestamps precisos
+    3. faster-whisper (local) extrai timestamps precisos
     """
     work = Path(output_audio).parent
     fonte_usada = "?"
@@ -180,8 +182,8 @@ def gerar_voz(texto: str, output_audio: str, output_timing: str) -> list:
         Path(wav_temp).unlink(missing_ok=True)
         fonte_usada = f"Kokoro FALLBACK ({KOKORO_VOICE})"
 
-    # ── Timestamps via OpenRouter ─────────────────────────────────────────────
-    timings = _extrair_timestamps_openrouter(output_audio)
+    # ── Timestamps via Whisper Local ──────────────────────────────────────────
+    timings = _extrair_timestamps_local(output_audio)
 
     with open(output_timing, "w", encoding="utf-8") as f:
         json.dump(timings, f, ensure_ascii=False, indent=2)
@@ -204,7 +206,7 @@ def calcular_duracao_audio(timing_file: str) -> float:
 # ── Teste standalone ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if "--test" in sys.argv:
-        print("Teste de geração de voz: Fish Audio → (fallback) Kokoro + OpenRouter Whisper")
+        print("Teste de geração de voz: Fish Audio → (fallback) Kokoro + Local Whisper")
         texto_teste = (
             "Tem pessoas que somem da sua vida exatamente quando você mais precisa. "
             "Isso não é coincidência. Isso é quem elas sempre foram. "
