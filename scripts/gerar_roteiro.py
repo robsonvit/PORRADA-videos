@@ -1,7 +1,7 @@
 """
 gerar_roteiro.py
-Gera roteiros virais de "verdades duras" via API Groq (Llama 3.3).
-Usa o Prompt Mestre completo de engenharia psicológica viral.
+Gera roteiros virais de "verdades duras" via OpenRouter API.
+Usa modelos gratuitos (:free) com fallback automático entre eles.
 Controla os temas usados para evitar repetições em 20 rodadas.
 """
 
@@ -13,7 +13,20 @@ import re
 from pathlib import Path
 from openai import OpenAI
 
-# ── Configurações ─────────────────────────────────────────────────────────────
+# ── Configurações OpenRouter ───────────────────────────────────────────────────
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Modelos gratuitos em ordem de preferência — sufixo :free = sem custo
+# O router automático "openrouter/auto:free" escolhe o melhor gratuito disponível
+MODELOS_GRATUITOS = [
+    "meta-llama/llama-4-scout:free",
+    "meta-llama/llama-4-maverick:free",
+    "google/gemini-2.0-flash-exp:free",
+    "deepseek/deepseek-r1-0528:free",
+    "microsoft/phi-4-reasoning-plus:free",
+]
+
 TEMAS_FILE = Path(__file__).parent.parent / "temas_usados.json"
 
 TEMAS_BASE = [
@@ -119,15 +132,15 @@ def escolher_tema() -> str:
 def _extrair_json(content: str) -> dict:
     """
     Extrai o JSON da resposta do modelo com múltiplas estratégias.
-    Lida com modelos que retornam raciocínio, markdown ou texto extra ao redor do JSON.
+    Lida com modelos que retornam raciocínio, markdown ou texto extra.
     """
-    # Estratégia 1: parse direto (resposta ideal)
+    # Estratégia 1: parse direto
     try:
         return json.loads(content.strip())
     except json.JSONDecodeError:
         pass
 
-    # Estratégia 2: remove blocos de markdown ```json ... ```
+    # Estratégia 2: remove blocos markdown ```json ... ```
     limpo = re.sub(r'```(?:json)?\s*', '', content)
     limpo = re.sub(r'```\s*', '', limpo)
     try:
@@ -135,47 +148,47 @@ def _extrair_json(content: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Estratégia 3: pega todos os blocos {...} e tenta o maior JSON válido
+    # Estratégia 3: maior bloco {...} válido com chaves obrigatórias
     candidatos = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
-    candidatos_sorted = sorted(candidatos, key=len, reverse=True)
-    for cand in candidatos_sorted:
+    for cand in sorted(candidatos, key=len, reverse=True):
         try:
             obj = json.loads(cand)
-            # Valida que tem ao menos as chaves obrigatórias
             if "titulo" in obj and "roteiro_fala" in obj:
                 return obj
         except json.JSONDecodeError:
             continue
 
-    # Estratégia 4: busca greedy do primeiro { até o último }
+    # Estratégia 4: greedy do primeiro { ao último }
     primeiro = content.find('{')
     ultimo = content.rfind('}')
     if primeiro != -1 and ultimo != -1 and ultimo > primeiro:
-        trecho = content[primeiro:ultimo + 1]
         try:
-            return json.loads(trecho)
+            return json.loads(content[primeiro:ultimo + 1])
         except json.JSONDecodeError as e:
-            raise ValueError(f"JSON inválido mesmo após todas as estratégias. Erro: {e}\nConteúdo: {content[:400]}")
+            raise ValueError(f"JSON inválido após todas as estratégias. Erro: {e}\nConteúdo: {content[:400]}")
 
-    raise ValueError(f"Nenhum bloco JSON encontrado na resposta. Conteúdo: {content[:400]}")
+    raise ValueError(f"Nenhum JSON encontrado. Conteúdo: {content[:400]}")
 
 
-# ── Geração de roteiro ────────────────────────────────────────────────────────
+# ── Geração de roteiro via OpenRouter ─────────────────────────────────────────
 def gerar_roteiro(tema: str) -> dict:
     """
-    Usa o Prompt Mestre para gerar roteiro viral via Groq (Llama 3.3).
-    Retorna dict com titulo, roteiro_fala, palavras_chave_pexels, hashtags, tema.
+    Gera o roteiro viral via OpenRouter usando modelos gratuitos.
+    Tenta cada modelo da lista em ordem até um funcionar.
     """
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY não definida!")
+
     client = OpenAI(
-        api_key=os.environ["GROK_API_KEY"],
-        base_url="https://api.groq.com/openai/v1",
+        api_key=OPENROUTER_API_KEY,
+        base_url=OPENROUTER_BASE_URL,
     )
 
     user_prompt = f"""Tema: {tema}
 
 Com base no tema acima, crie o roteiro completo seguindo todas as regras do sistema.
 
-CRÍTICO E OBRIGATÓRIO: VOCÊ DEVE RETORNAR APENAS E EXCLUSIVAMENTE O OBJETO JSON. 
+CRÍTICO E OBRIGATÓRIO: VOCÊ DEVE RETORNAR APENAS E EXCLUSIVAMENTE O OBJETO JSON.
 NÃO ESCREVA NENHUMA PALAVRA ANTES OU DEPOIS. NÃO ESCREVA RACIOCÍNIOS NEM EXPLICAÇÕES.
 SUA RESPOSTA INTEIRA DEVE COMEÇAR COM A CHAVE E TERMINAR COM A CHAVE.
 
@@ -188,56 +201,42 @@ Retorne APENAS um JSON válido com esta estrutura exata (sem markdown, sem texto
 }}
 
 Para palavras_chave_pexels, use termos em INGLÊS que combinem com o tema visualmente:
-- Exemplos: "lonely wolf forest", "person walking alone road", "rainy night city", "dark ocean waves", "misty mountain fog", "silhouette sunset", "empty road fog"
-- Escolha os que melhor combinam com a emoção do roteiro
+- Exemplos: "lonely wolf forest", "person walking alone road", "rainy night city", "dark ocean waves"
 - Exatamente 4 palavras-chave
 
-Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem acentos, letras minúsculas) que representem as palavras-chave emocionais DESTE roteiro específico.
-- Exemplos: #traicao #amizadefalsa #abandono #solidao #superacao #maturidade #autoestima #silencio #limites
-- Use palavras que descrevem o TEMA central do roteiro, não genéricas como #reflexao ou #motivacao"""
+Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem acentos, letras minúsculas):
+- Exemplos: #traicao #amizadefalsa #abandono #solidao #superacao #maturidade"""
 
-    print("Chamando API Groq para gerar roteiro...")
-
-    # Modelos ativos na Groq (agosto 2026) — tenta em ordem de preferência
-    MODELOS = [
-        "qwen/qwen3.6-27b",
-        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "openai/gpt-oss-20b",
-    ]
+    print("Chamando OpenRouter para gerar roteiro...")
 
     last_error = None
     result = None
 
-    for modelo in MODELOS:
+    for modelo in MODELOS_GRATUITOS:
         try:
-            print(f"  Tentando modelo: {modelo}...")
-
-            # Para modelos de reasoning (Qwen3), usa reasoning_format=hidden
-            # para descartar o thinking e obter só a resposta no content
-            usa_reasoning = "qwen" in modelo.lower()
-
-            call_kwargs = dict(
+            print(f"  Tentando: {modelo}...")
+            response = client.chat.completions.create(
                 model=modelo,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
-                max_tokens=4000,
+                max_tokens=1500,
+                extra_headers={
+                    "HTTP-Referer": "https://github.com/robsonvit/PORRADA-videos",
+                    "X-Title": "PORRADA Videos Bot",
+                },
             )
-            if usa_reasoning:
-                call_kwargs["extra_body"] = {"reasoning_format": "hidden"}
-
-            response = client.chat.completions.create(**call_kwargs)
 
             content = (response.choices[0].message.content or "").strip()
-            print(f"  Resposta ({modelo}): {content[:200]}...")
+            print(f"  Resposta: {content[:200]}...")
 
             if not content:
-                raise ValueError(f"Modelo {modelo} retornou conteúdo vazio")
+                raise ValueError(f"{modelo} retornou conteúdo vazio")
 
             result = _extrair_json(content)
-            print(f"  ✅ JSON extraído com sucesso via {modelo}")
+            print(f"  ✅ Roteiro gerado com sucesso via {modelo}")
             break
 
         except Exception as e:
@@ -246,14 +245,13 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             continue
 
     if result is None:
-        raise ValueError(f"Todos os modelos falharam. Último erro: {last_error}")
-            
+        raise ValueError(f"Todos os modelos OpenRouter falharam. Último erro: {last_error}")
+
     result["tema"] = tema
 
-    # Garante compatibilidade: monta o campo 'hashtags' a partir de hashtags_tema + fixas
+    # Monta campo 'hashtags' unificado
     hashtags_tema = result.get("hashtags_tema", [])
     if isinstance(hashtags_tema, list) and hashtags_tema:
-        # 3 keywords do roteiro + 2 hashtags fixas obrigatórias
         hashtags_str = " ".join(hashtags_tema[:3]) + " #videoparastatus #reflexao"
     else:
         hashtags_str = "#videoparastatus #reflexao"
@@ -271,7 +269,7 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 # ── Teste standalone ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if "--test" in sys.argv:
-        print("Modo de teste — verificando conexao com Groq...")
+        print("Modo de teste — verificando conexao com OpenRouter...")
         tema = escolher_tema()
         roteiro = gerar_roteiro(tema)
         print("\nResultado:")
