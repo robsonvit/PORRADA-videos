@@ -115,6 +115,51 @@ def escolher_tema() -> str:
     return tema
 
 
+# ── Extrator de JSON robusto ──────────────────────────────────────────────────
+def _extrair_json(content: str) -> dict:
+    """
+    Extrai o JSON da resposta do modelo com múltiplas estratégias.
+    Lida com modelos que retornam raciocínio, markdown ou texto extra ao redor do JSON.
+    """
+    # Estratégia 1: parse direto (resposta ideal)
+    try:
+        return json.loads(content.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Estratégia 2: remove blocos de markdown ```json ... ```
+    limpo = re.sub(r'```(?:json)?\s*', '', content)
+    limpo = re.sub(r'```\s*', '', limpo)
+    try:
+        return json.loads(limpo.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Estratégia 3: pega todos os blocos {...} e tenta o maior JSON válido
+    candidatos = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+    candidatos_sorted = sorted(candidatos, key=len, reverse=True)
+    for cand in candidatos_sorted:
+        try:
+            obj = json.loads(cand)
+            # Valida que tem ao menos as chaves obrigatórias
+            if "titulo" in obj and "roteiro_fala" in obj:
+                return obj
+        except json.JSONDecodeError:
+            continue
+
+    # Estratégia 4: busca greedy do primeiro { até o último }
+    primeiro = content.find('{')
+    ultimo = content.rfind('}')
+    if primeiro != -1 and ultimo != -1 and ultimo > primeiro:
+        trecho = content[primeiro:ultimo + 1]
+        try:
+            return json.loads(trecho)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON inválido mesmo após todas as estratégias. Erro: {e}\nConteúdo: {content[:400]}")
+
+    raise ValueError(f"Nenhum bloco JSON encontrado na resposta. Conteúdo: {content[:400]}")
+
+
 # ── Geração de roteiro ────────────────────────────────────────────────────────
 def gerar_roteiro(tema: str) -> dict:
     """
@@ -152,13 +197,6 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
 - Use palavras que descrevem o TEMA central do roteiro, não genéricas como #reflexao ou #motivacao"""
 
     print("Chamando API Groq para gerar roteiro...")
-    try:
-        import requests
-        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {os.environ.get('GROK_API_KEY')}"})
-        print("MODELOS DISPONÍVEIS NA GROQ:")
-        print(r.json())
-    except Exception as e:
-        print("Erro buscando modelos:", e)
 
     response = client.chat.completions.create(
         model="qwen/qwen3.6-27b",
@@ -167,23 +205,15 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.7,
-        max_tokens=1500,
+        max_tokens=2000,
+        extra_body={"enable_thinking": False},  # Desativa modo thinking do Qwen3
     )
 
     content = response.choices[0].message.content
     print("RESPOSTA CRUA DO MODELO:")
-    print(content)
-    try:
-        result = json.loads(content)
-    except:
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group(0))
-            except Exception as inner_e:
-                raise ValueError(f"Não retornou JSON válido no match. Erro: {inner_e}")
-        else:
-            raise ValueError("Não encontrou chaves no texto retornado")
+    print(content[:500])  # Loga só os primeiros 500 chars para não poluir
+
+    result = _extrair_json(content)
             
     result["tema"] = tema
 
