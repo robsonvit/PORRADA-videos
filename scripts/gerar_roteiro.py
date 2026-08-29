@@ -196,13 +196,15 @@ Retorne APENAS um JSON válido com esta estrutura exata (sem markdown, sem texto
 {{
     "titulo": "TÍTULO EM MAIÚSCULAS — impactante e curto (máx 55 chars)",
     "roteiro_fala": "Texto completo da narração. Frases curtas separadas por ponto. 100-140 palavras. Comece com o gancho forte.",
-    "palavras_chave_pexels": ["english keyword 1", "english keyword 2", "english keyword 3", "english keyword 4"],
+    "palavras_chave_pexels": ["natureza imponente 1", "situacao emocional 1", "natureza imponente 2", "situacao emocional 2"],
     "hashtags_tema": ["#palavrachave1", "#palavrachave2", "#palavrachave3"]
 }}
 
-Para palavras_chave_pexels, use termos em INGLÊS que combinem com o tema visualmente:
-- Exemplos: "lonely wolf forest", "person walking alone road", "rainy night city", "dark ocean waves"
-- Exatamente 4 palavras-chave
+Para palavras_chave_pexels, use termos em INGLÊS que combinem com o tema visualmente.
+Você deve alternar entre:
+1. Vídeos de natureza imponente (ex: "dark forest", "waterfall", "imposing lion", "stormy ocean", "mountain peak")
+2. Pessoas em situações relacionadas ao roteiro (ex: "person crying alone", "fake friendship", "person walking away", "lonely man", "sad woman")
+- Exatamente 4 palavras-chave (2 de natureza, 2 de situações de pessoas)
 
 Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem acentos, letras minúsculas):
 - Exemplos: #traicao #amizadefalsa #abandono #solidao #superacao #maturidade"""

@@ -181,6 +181,7 @@ def processar_clip_vertical(
     output_path: str,
     duracao: float,
     aplicar_hflip: bool = False,
+    aplicar_slowmo: bool = False,
 ) -> None:
     """
     Converte clipe para formato vertical 1080x1920.
@@ -189,13 +190,14 @@ def processar_clip_vertical(
     [FIX-2] setpts=PTS-STARTPTS → reseta timestamps para evitar descontinuidades
     """
     hflip_str = "hflip," if aplicar_hflip else ""
+    setpts_str = "setpts=2.0*(PTS-STARTPTS)" if aplicar_slowmo else "setpts=PTS-STARTPTS"
     vf = (
         f"fps={VIDEO_FPS},"               # [FIX-2] Normaliza FPS PRIMEIRO
         f"{hflip_str}"
         f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
         f"setsar=1,"
-        f"setpts=PTS-STARTPTS"            # [FIX-2] Reseta timestamps
+        f"{setpts_str}"            # [FIX-2] Reseta timestamps (com slowmo opcional)
     )
     run_ffmpeg([
         "-i", input_path,
@@ -253,6 +255,9 @@ def montar_video(
     idx = 0
 
     while acumulado < duracao_pexels_necessaria:
+        if idx > 0 and idx % len(pexels_clips) == 0:
+            random.shuffle(pexels_clips) # muda a ordem ao repetir a lista
+
         clip_orig = pexels_clips[idx % len(pexels_clips)]
         dur_orig  = get_media_duration(clip_orig)
         dur_clip  = min(dur_orig, MAX_CLIP_DURATION, duracao_pexels_necessaria - acumulado)
@@ -263,6 +268,7 @@ def montar_video(
         processar_clip_vertical(
             clip_orig, out_clip, dur_clip,
             aplicar_hflip=True,
+            aplicar_slowmo=True,
         )
         pexels_processados.append(out_clip)
         acumulado += dur_clip

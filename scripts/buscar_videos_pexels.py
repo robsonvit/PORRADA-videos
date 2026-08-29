@@ -18,12 +18,29 @@ HEADERS_TEMPLATE = {"Authorization": ""}  # Preenchido com env var
 
 # Queries de fallback para garantir que sempre há vídeos disponíveis
 QUERIES_FALLBACK = [
-    "lonely wolf nature",
-    "misty forest morning",
-    "dark ocean waves",
-    "rain drops forest",
-    "empty road fog",
+    "imposing waterfall nature",
+    "dark forest trees",
+    "person crying alone",
+    "lion imposing",
+    "empty road sad",
+    "mountain peak majestic"
 ]
+
+PEXELS_USADOS_FILE = Path(__file__).parent.parent / "pexels_usados.json"
+
+def carregar_pexels_usados() -> set:
+    if PEXELS_USADOS_FILE.exists():
+        import json
+        with open(PEXELS_USADOS_FILE, "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    return set()
+
+def salvar_pexels_usados(novos_ids: set) -> None:
+    import json
+    usados = carregar_pexels_usados()
+    usados.update(novos_ids)
+    with open(PEXELS_USADOS_FILE, "w", encoding="utf-8") as f:
+        json.dump(list(usados), f, ensure_ascii=False, indent=2)
 
 
 # ── Funções auxiliares ────────────────────────────────────────────────────────
@@ -138,7 +155,8 @@ def buscar_videos(keywords: list, duracao_audio: float, output_dir: str) -> list
     todas_keywords = keywords + QUERIES_FALLBACK
     random.shuffle(todas_keywords[:len(keywords)])  # Randomiza apenas as do roteiro
 
-    ids_baixados = set()  # Evita duplicatas
+    ids_baixados = set()  # Evita duplicatas nesta sessao
+    historico_usados = carregar_pexels_usados() # Videos usados em criacoes passadas
     caminhos_baixados = []
 
     for keyword in todas_keywords:
@@ -153,7 +171,7 @@ def buscar_videos(keywords: list, duracao_audio: float, output_dir: str) -> list
                 break
 
             video_id = video.get("id")
-            if video_id in ids_baixados:
+            if video_id in ids_baixados or video_id in historico_usados:
                 continue
 
             # Filtra vídeos com duração razoável (4-15 segundos ideal)
@@ -175,6 +193,8 @@ def buscar_videos(keywords: list, duracao_audio: float, output_dir: str) -> list
             if _download_video(url, str(filename)):
                 ids_baixados.add(video_id)
                 caminhos_baixados.append(str(filename))
+
+    salvar_pexels_usados(ids_baixados)
 
     print(f"\n✅ {len(caminhos_baixados)} clipes baixados para '{output_dir}'")
     return caminhos_baixados
