@@ -10,6 +10,7 @@ import json
 import random
 import sys
 import re
+import time
 from pathlib import Path
 from openai import OpenAI
 
@@ -17,10 +18,17 @@ from openai import OpenAI
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
+# ── Configurações Grok (xAI) Fallback ──────────────────────────────────────────
+GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
+GROK_BASE_URL = "https://api.x.ai/v1"
+
 # Modelos gratuitos em ordem de preferência — sufixo :free = sem custo
 # O router automático "openrouter/auto:free" escolhe o melhor gratuito disponível
 MODELOS_GRATUITOS = [
     "openrouter/auto:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "microsoft/phi-3-mini-128k-instruct:free",
     "openai/gpt-oss-20b:free",
     "google/gemma-4-31b-it:free",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -174,15 +182,10 @@ def _extrair_json(content: str) -> dict:
 def gerar_roteiro(tema: str) -> dict:
     """
     Gera o roteiro viral via OpenRouter usando modelos gratuitos.
-    Tenta cada modelo da lista em ordem até um funcionar.
+    Caso todos os modelos falhem por rate limit, ativa o fallback para xAI Grok.
     """
-    if not OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY não definida!")
-
-    client = OpenAI(
-        api_key=OPENROUTER_API_KEY,
-        base_url=OPENROUTER_BASE_URL,
-    )
+    if not OPENROUTER_API_KEY and not GROK_API_KEY:
+        raise RuntimeError("Nenhuma chave (OPENROUTER_API_KEY ou GROK_API_KEY) definida!")
 
     user_prompt = f"""Tema: {tema}
 
@@ -214,40 +217,79 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
     last_error = None
     result = None
 
-    for modelo in MODELOS_GRATUITOS:
+    if OPENROUTER_API_KEY:
+        client = OpenAI(
+            api_key=OPENROUTER_API_KEY,
+            base_url=OPENROUTER_BASE_URL,
+        )
+        
+        for modelo in MODELOS_GRATUITOS:
+            try:
+                print(f"  Tentando: {modelo}...")
+                response = client.chat.completions.create(
+                    model=modelo,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=1500,
+                    extra_headers={
+                        "HTTP-Referer": "https://github.com/robsonvit/PORRADA-videos",
+                        "X-Title": "PORRADA Videos Bot",
+                    },
+                )
+
+                content = (response.choices[0].message.content or "").strip()
+                print(f"  Resposta: {content[:200]}...")
+
+                if not content:
+                    raise ValueError(f"{modelo} retornou conteúdo vazio")
+
+                result = _extrair_json(content)
+                print(f"  ✅ Roteiro gerado com sucesso via {modelo}")
+                break
+
+            except Exception as e:
+                print(f"  ⚠️ Falhou com {modelo}: {e}")
+                last_error = e
+                # Pausa estratégica para evitar Rate Limits (429) em cascata
+                time.sleep(3)
+                continue
+    else:
+        print("  ⚠️ OPENROUTER_API_KEY ausente. Pulando OpenRouter...")
+
+    # ── Fallback xAI Grok ─────────────────────────────────────────────────────
+    if result is None and GROK_API_KEY:
+        print(f"\n  🔄 Todos os modelos OpenRouter falharam (ou sem chave). Ativando Fallback Grok...")
         try:
-            print(f"  Tentando: {modelo}...")
-            response = client.chat.completions.create(
-                model=modelo,
+            grok_client = OpenAI(
+                api_key=GROK_API_KEY,
+                base_url=GROK_BASE_URL,
+            )
+            response = grok_client.chat.completions.create(
+                model="grok-beta",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
                 max_tokens=1500,
-                extra_headers={
-                    "HTTP-Referer": "https://github.com/robsonvit/PORRADA-videos",
-                    "X-Title": "PORRADA Videos Bot",
-                },
             )
-
+            
             content = (response.choices[0].message.content or "").strip()
-            print(f"  Resposta: {content[:200]}...")
-
+            print(f"  Resposta Grok: {content[:200]}...")
             if not content:
-                raise ValueError(f"{modelo} retornou conteúdo vazio")
+                raise ValueError("Grok retornou conteúdo vazio")
 
             result = _extrair_json(content)
-            print(f"  ✅ Roteiro gerado com sucesso via {modelo}")
-            break
-
+            print(f"  ✅ Roteiro gerado com sucesso via Grok (grok-beta)")
         except Exception as e:
-            print(f"  ⚠️ Falhou com {modelo}: {e}")
+            print(f"  ⚠️ Fallback Grok falhou: {e}")
             last_error = e
-            continue
 
     if result is None:
-        raise ValueError(f"Todos os modelos OpenRouter falharam. Último erro: {last_error}")
+        raise ValueError(f"Todas as tentativas falharam (OpenRouter e Grok). Último erro: {last_error}")
 
     result["tema"] = tema
 
