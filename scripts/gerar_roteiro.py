@@ -23,16 +23,20 @@ GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
 GROK_BASE_URL = "https://api.x.ai/v1"
 
 # Modelos gratuitos em ordem de preferência — sufixo :free = sem custo
-# O router automático "openrouter/auto:free" escolhe o melhor gratuito disponível
+# Lista atualizada em agosto/2026 — verificada via API: https://openrouter.ai/api/v1/models
+# ATENÇÃO: A lista anterior tinha modelos obsoletos/inexistentes (llama-3.1-8b:free,
+# phi-3-mini:free, gemma-4-31b:free, nemotron-3-nano:free, glm-5.2:free).
+# O "openrouter/auto:free" também não existe mais — o correto é "openrouter/free".
 MODELOS_GRATUITOS = [
-    "openrouter/auto:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "microsoft/phi-3-mini-128k-instruct:free",
-    "openai/gpt-oss-20b:free",
-    "google/gemma-4-31b-it:free",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "z-ai/glm-5.2:free",
+    "openrouter/free",                                    # Router auto — escolhe o melhor free disponível
+    "nvidia/nemotron-3.5-lightning:free",                 # NVIDIA 30B MoE — contexto 1M tokens
+    "dots-studio/dots-3-note-preview:free",               # Dots Studio 280B MoE — alta qualidade
+    "inclusionai/ling-3.0-flash-fin:free",                # InclusionAI 124B MoE — rápido
+    "liquid/lfm-2.5-2.6b:free",                          # LiquidAI — compacto mas funcional
+    "meta-llama/llama-4-scout:free",                     # Meta Llama 4 Scout
+    "google/gemma-3-27b-it:free",                        # Google Gemma 3 27B
+    "qwen/qwen3-8b:free",                                # Qwen 8B
+    "mistralai/mistral-small-3.2-24b-instruct:free",     # Mistral 24B
 ]
 
 TEMAS_FILE = Path(__file__).parent.parent / "temas_usados.json"
@@ -136,12 +140,37 @@ def escolher_tema() -> str:
     return tema
 
 
+# ── Limpeza de reasoning tags ─────────────────────────────────────────────────
+def _remover_reasoning(content: str) -> str:
+    """
+    Remove blocos de raciocínio interno que modelos de thinking retornam.
+    Modelos como GLM, Nemotron, LFM etc retornam <think>...</think> ANTES
+    do JSON real — isso causava JSONDecodeError. Esta função limpa esses blocos.
+
+    Exemplo do problema no log:
+      <think>
+        Here's a thinking process...  (centenas de linhas)
+      </think>
+      { "titulo": "...", ... }   <- o JSON real fica depois
+    """
+    # Remove <think>...</think> (captura blocos longo com DOTALL)
+    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <reasoning>...</reasoning>
+    content = re.sub(r'<reasoning>.*?</reasoning>', '', content, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <think> solto sem fechamento (modelo parou no meio do raciocínio)
+    content = re.sub(r'<think>.*', '', content, flags=re.DOTALL | re.IGNORECASE)
+    return content.strip()
+
+
 # ── Extrator de JSON robusto ──────────────────────────────────────────────────
 def _extrair_json(content: str) -> dict:
     """
     Extrai o JSON da resposta do modelo com múltiplas estratégias.
     Lida com modelos que retornam raciocínio, markdown ou texto extra.
     """
+    # Pré-processamento: remove tags de reasoning (<think>, <reasoning>, etc.)
+    content = _remover_reasoning(content)
+
     # Estratégia 1: parse direto
     try:
         return json.loads(content.strip())
@@ -222,7 +251,7 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
             api_key=OPENROUTER_API_KEY,
             base_url=OPENROUTER_BASE_URL,
         )
-        
+
         for modelo in MODELOS_GRATUITOS:
             try:
                 print(f"  Tentando: {modelo}...")
@@ -241,7 +270,8 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
                 )
 
                 content = (response.choices[0].message.content or "").strip()
-                print(f"  Resposta: {content[:200]}...")
+                # Log primeiros 300 chars para debug (pode incluir <think> antes)
+                print(f"  Resposta bruta (300 chars): {content[:300]}...")
 
                 if not content:
                     raise ValueError(f"{modelo} retornou conteúdo vazio")
@@ -276,7 +306,7 @@ Para hashtags_tema, gere EXATAMENTE 3 hashtags em português (sem espaços, sem 
                 temperature=0.7,
                 max_tokens=1500,
             )
-            
+
             content = (response.choices[0].message.content or "").strip()
             print(f"  Resposta Grok: {content[:200]}...")
             if not content:
