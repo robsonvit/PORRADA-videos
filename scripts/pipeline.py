@@ -34,6 +34,9 @@ from montar_video import montar_video, get_media_duration, SHELBY_CLIP_DURATION
 from enviar_telegram import enviar_video_telegram, enviar_mensagem_telegram
 from enviar_youtube import enviar_video_youtube
 
+# ── Constantes de controle ────────────────────────────────────────────────────
+MAX_DURACAO_SHORTS = 58.0   # YouTube Shorts exige vídeo ≤ 60s (usamos 58s com margem)
+
 # ── Paths do projeto ──────────────────────────────────────────────────────────
 PROJETO_ROOT = Path(__file__).parent.parent
 SHELBY_DIR = PROJETO_ROOT / "VÍDEOS DO SHELBY"
@@ -76,6 +79,17 @@ def executar_pipeline(numero: int = 1) -> bool:
         )
         duracao_audio = calcular_duracao_audio(timing_file)
         print(f"  📊 Duração da narração: {duracao_audio:.1f}s")
+
+        # ━━ PROTEÇÃO: garante que o áudio não ultrapasse o limite do Shorts ━━━━━━━━━━━
+        duracao_maxima = MAX_DURACAO_SHORTS
+        if duracao_audio > MAX_DURACAO_SHORTS:
+            print(f"  ⚠️  AVISO: narração de {duracao_audio:.1f}s ULTRAPASSA {MAX_DURACAO_SHORTS}s! Vídeo será cortado.")
+            enviar_mensagem_telegram(
+                f"⚠️ Narração de {duracao_audio:.1f}s excedeu limite ({MAX_DURACAO_SHORTS}s). "
+                f"Vídeo será cortado para não violar regra do Shorts."
+            )
+        else:
+            print(f"  ✅ Duração OK para YouTube Shorts (≤ {MAX_DURACAO_SHORTS}s)")
 
         # ── Passo 3: Baixa vídeos Pexels ──────────────────────────────────
         print("\n🎥 [3/6] Buscando vídeos Pexels...")
@@ -120,6 +134,7 @@ def executar_pipeline(numero: int = 1) -> bool:
             output_file=output_file,
             work_dir=str(work_dir),
             musicas_dir=str(MUSICAS_DIR) if MUSICAS_DIR.exists() else "",
+            max_duracao=MAX_DURACAO_SHORTS,
         )
 
         # Copia para pasta output permanente

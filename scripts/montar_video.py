@@ -219,11 +219,13 @@ def montar_video(
     output_file: str,
     work_dir: str,
     musicas_dir: str = "",
+    max_duracao: float = 58.0,
 ) -> str:
     """
     Monta o vídeo final completo com todos os fixes aplicados.
-    
+
     musicas_dir: pasta com os arquivos .mp3 de fundo (opcional). Se vazio, sem música.
+    max_duracao: duração máxima do vídeo final em segundos (padrão 58s para Shorts ≤ 60s).
     """
     work = Path(work_dir)
 
@@ -234,7 +236,13 @@ def montar_video(
     # Adiciona margem de 2s para garantir que o vídeo nunca corte antes do áudio
     MARGEM_FINAL = 2.0
     duracao_audio_com_margem = duracao_audio + MARGEM_FINAL
-    print(f"\nDuracao do audio: {duracao_audio:.1f}s (+{MARGEM_FINAL}s margem = {duracao_audio_com_margem:.1f}s total)")
+
+    # ━━ PROTEÇÃO SHORTS: garante que o vídeo não ultrapasse max_duracao ━━━━━━━━━━
+    if duracao_audio_com_margem > max_duracao:
+        print(f"  ⚠️  Áudio+margem ({duracao_audio_com_margem:.1f}s) > max_duracao ({max_duracao}s). Cortando no limite.")
+        duracao_audio_com_margem = max_duracao
+
+    print(f"\nDuracao do audio: {duracao_audio:.1f}s (+{MARGEM_FINAL}s margem = {duracao_audio_com_margem:.1f}s total | limite: {max_duracao}s)")
 
     duracao_pexels_necessaria = max(1.0, duracao_audio_com_margem - SHELBY_CLIP_DURATION)
     duracao_total = SHELBY_CLIP_DURATION + duracao_pexels_necessaria

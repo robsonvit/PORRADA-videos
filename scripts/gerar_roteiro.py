@@ -822,23 +822,32 @@ O conteúdo deve ser **o roteiro**, não uma explicação sobre como fazer o rot
 
 ---
 
-# 17. TAMANHO
+# 17. TAMANHO — REGRA ABSOLUTA: MÁXIMO 60 SEGUNDOS
 
-A duração deve ser **variável**.
+Esta é uma **regra obrigatória e inviolável**.
 
-Não produza todos os roteiros com exatamente o mesmo tamanho.
+O roteiro deve ser narrado em **no máximo 55 segundos** (margem de segurança).
 
-Ajuste a quantidade de texto à força da ideia.
+Isso corresponde a **no máximo 110 palavras** no total do roteiro.
 
-Um roteiro pode ser curto e brutal.
+Um locutor profissional fala em média 120 palavras por minuto.
 
-Outro pode desenvolver uma história.
+Portanto:
 
-Outro pode ser mais reflexivo.
+* **Mínimo: 60 palavras** (~30 segundos) — roteiro curto e brutal
+* **Máximo: 110 palavras** (~55 segundos) — roteiro mais desenvolvido
+
+**Antes de entregar, conte as palavras do roteiro.**
+
+**Se passar de 110 palavras, corte até reduzir.**
 
 Priorize:
 
 **retenção e impacto > quantidade de palavras.**
+
+**Vídeos acima de 60 segundos são desclassificados como YouTube Shorts.**
+
+**NUNCA entregue um roteiro com mais de 110 palavras.**
 
 ---
 
