@@ -13,13 +13,20 @@ Fluxo completo:
 """
 
 import os
-import shutil
 import sys
-import re
-import tempfile
+import shutil
 import traceback
+import tempfile
+import re
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Força o encoding do console para UTF-8 no Windows para evitar crash com emojis
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
 
 load_dotenv()
 

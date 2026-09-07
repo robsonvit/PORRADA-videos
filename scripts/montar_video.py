@@ -25,7 +25,8 @@ VIDEO_WIDTH  = 1080
 VIDEO_HEIGHT = 1920
 SHELBY_CLIP_DURATION = 4.0   # Segundos do clip Shelby no início
 MAX_CLIP_DURATION    = 3.0   # MÁXIMO 3s por clip Pexels (evita cópias)
-FONT_FILE = "/usr/share/fonts/truetype/anton/Anton-Regular.ttf"
+# Usa impact.ttf que está na pasta raiz do projeto. O FFmpeg é executado a partir da raiz, então caminho relativo basta.
+FONT_FILE = "impact.ttf"
 FONT_SIZE = 84
 VIDEO_FPS = 30               # FPS único para todos os clips → elimina congelamentos
 
