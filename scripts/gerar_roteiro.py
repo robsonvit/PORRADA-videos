@@ -31,14 +31,7 @@ MODELOS_GRATUITOS = [
     "openrouter/free",                                    # Router auto — escolhe o melhor free disponível
     "nvidia/nemotron-3.5-lightning:free",                 # NVIDIA 30B MoE — contexto 1M tokens
     "dots-studio/dots-3-note-preview:free",               # Dots Studio 280B MoE — alta qualidade
-    "inclusionai/ling-3.0-flash-fin:free",                # InclusionAI 124B MoE — rápido
-    "liquid/lfm-2.5-2.6b:free",                          # LiquidAI — compacto mas funcional
-    "meta-llama/llama-4-scout:free",                     # Meta Llama 4 Scout
-    "google/gemma-3-27b-it:free",                        # Google Gemma 3 27B
-    "qwen/qwen3-8b:free",                                # Qwen 8B
-    "mistralai/mistral-small-3.2-24b-instruct:free",     # Mistral 24B
 ]
-
 TEMAS_FILE = Path(__file__).parent.parent / "temas_usados.json"
 
 TEMAS_BASE = [
@@ -122,8 +115,7 @@ Sua força vem da experiência, não de frases motivacionais vazias.
 ---
 
 # 2. VOZ E LINGUAGEM
-
-Escreva exclusivamente em **português brasileiro informal, natural e direto**.
+Escreva EXCLUSIVAMENTE em **PORTUGUÊS DO BRASIL**. É ABSOLUTAMENTE PROIBIDO usar inglês. Se você usar inglês, o processo falhará. O roteiro deve ser informal, natural e direto.
 
 A fala precisa parecer humana e espontânea.
 
@@ -1028,7 +1020,7 @@ def _remover_reasoning(content: str) -> str:
 # Sons/onomatopeias/risadas que o TTS não deve receber
 _SONS_PROIBIDOS = re.compile(
     r'\b(h+m+h*|h+u+m+|a+h+|o+h+|u+h+|a+h+a+|h+e+h+|k+k+|r+s+|'  # sons
-    r'huh|ugh|hmm|hm|um+|uh|aham|uhu+m|ohh?|ahh?|'                 # interjeições
+    r'huh|ugh|hmm|hm|um{2,}|uh|aham|uhu+m|ohh?|ahh?|'                 # interjeições
     r'ha{2,}|he{2,}|hi{2,}|ho{2,}|hu{2,}|'                        # risadas
     r'mua+ha+|bwa+ha+|muaha+|buaha+)\b',
     re.IGNORECASE
@@ -1036,12 +1028,14 @@ _SONS_PROIBIDOS = re.compile(
 
 # Palavras/frases em inglês comuns que modelos inserem
 _INGLES_PATTERN = re.compile(
-    r'\b(you|your|yourself|yourself|the|and|that|this|with|have|'  # artigos/pronomes
+    r'\b(you|your|yourself|the|and|that|this|with|have|'  # artigos/pronomes originais
     r'know|think|feel|said|say|look|life|people|time|way|'         # verbos/subs comuns
-    r'remember|always|never|because|when|what|how|who|why|where|' # conectivos
+    r'remember|always|never|because|when|what|how|who|why|where|' # conectivos originais
     r'but|for|not|can|will|would|could|should|must|'              # modais
     r'of|in|on|at|to|from|by|about|into|through|during|'         # preposições
-    r'really|just|only|even|still|already|yet|again|also|too)\b', # advérbios
+    r'really|just|only|even|still|already|yet|again|also|too|' # advérbios originais
+    r'is|are|it|they|we|he|she|was|were|been|does|did|has|had|' # verbos e pronomes vitais adicionais
+    r'an|if|there|their|them|then|than|so|up|out|which|all|any|some|more|most|other|such|own|same|very|don|now)\b', # palavras chaves comuns inglesas extras
     re.IGNORECASE
 )
 
@@ -1120,7 +1114,7 @@ def _roteiro_tem_alucinacao(roteiro: str) -> tuple[bool, str]:
     if palavras_total > 0:
         matches_ingles = len(_INGLES_PATTERN.findall(roteiro))
         proporcao = matches_ingles / palavras_total
-        if proporcao > 0.15:  # mais de 15% das palavras em inglês = suspeito
+        if proporcao >= 0.05:  # mais de 5% das palavras na lista de inglês = suspeito
             return True, f"Excesso de inglês: {matches_ingles}/{palavras_total} palavras ({proporcao:.0%})"
 
     # Verifica se o roteiro é muito curto (menos de 40 palavras = alucinação/truncamento)
