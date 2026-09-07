@@ -934,7 +934,43 @@ Quando disser:
 
 NÃO repita os anteriores.
 
-Sempre respeite todas as regras deste Prompt Mestre."""
+Sempre respeite todas as regras deste Prompt Mestre.
+
+---
+
+# 20. REGRA ABSOLUTA: APENAS TEXTO FALADO
+
+Esta é a regra mais crítica de todo o prompt.
+
+O roteiro será lido em voz alta por uma IA de síntese de voz (TTS).
+
+Portanto:
+
+**PROIBIDO ABSOLUTAMENTE:**
+
+* Sons, onomatopeias ou ruídos escritos: "hm", "hmm", "humm", "huh", "mmm", "uh", "ah", "oh", "aham", "uhum", "haha", "hehe", "kk", "kkk", "rs", "rsrs", "hehehe", "ahaha", "muahaha", "bwahaha"
+* Risadas escritas de qualquer forma
+* Interjeições vazias que não formam palavras reais
+* Palavras ou frases em inglês, espanhol, francês, italiano ou qualquer outro idioma que não seja o português do Brasil
+* Expressões estrangeiras, latinismos, anglicismos não assimilados
+* Palavras inventadas, neologismos artificiais ou termos que não existem no dicionário
+* Símbolos, caracteres especiais ou pontuação excessiva
+* Asteriscos, travessões duplos, underlines, colchetes
+* Palavras em maiúsculas excessivas para "ênfase"
+* Indicações de entonação como [pausa], [ênfase], [lento], etc.
+
+**O roteiro deve conter EXCLUSIVAMENTE:**
+
+* Palavras reais do português brasileiro
+* Frases completas e gramaticalmente corretas
+* Pontuação padrão: ponto, vírgula, reticências, interrogação, exclamação
+* Texto pronto para ser lido por uma voz humana sem nenhuma adaptação
+
+Se você tiver vontade de usar "hm" ou qualquer som, simplesmente escreva a frase completa sem o som.
+
+Se quiser criar uma pausa, use reticências (...) ou ponto final e nova linha.
+
+NUNCA produza nada que não possa ser lido diretamente como fala humana em português."""
 
 # ── Controle de temas ─────────────────────────────────────────────────────────
 def carregar_temas_usados() -> list:
@@ -986,6 +1022,116 @@ def _remover_reasoning(content: str) -> str:
     # Remove <think> solto sem fechamento (modelo parou no meio do raciocínio)
     content = re.sub(r'<think>.*', '', content, flags=re.DOTALL | re.IGNORECASE)
     return content.strip()
+
+
+# ── Sanitização do roteiro ────────────────────────────────────────────────────
+# Sons/onomatopeias/risadas que o TTS não deve receber
+_SONS_PROIBIDOS = re.compile(
+    r'\b(h+m+h*|h+u+m+|a+h+|o+h+|u+h+|a+h+a+|h+e+h+|k+k+|r+s+|'  # sons
+    r'huh|ugh|hmm|hm|um+|uh|aham|uhu+m|ohh?|ahh?|'                 # interjeições
+    r'ha{2,}|he{2,}|hi{2,}|ho{2,}|hu{2,}|'                        # risadas
+    r'mua+ha+|bwa+ha+|muaha+|buaha+)\b',
+    re.IGNORECASE
+)
+
+# Palavras/frases em inglês comuns que modelos inserem
+_INGLES_PATTERN = re.compile(
+    r'\b(you|your|yourself|yourself|the|and|that|this|with|have|'  # artigos/pronomes
+    r'know|think|feel|said|say|look|life|people|time|way|'         # verbos/subs comuns
+    r'remember|always|never|because|when|what|how|who|why|where|' # conectivos
+    r'but|for|not|can|will|would|could|should|must|'              # modais
+    r'of|in|on|at|to|from|by|about|into|through|during|'         # preposições
+    r'really|just|only|even|still|already|yet|again|also|too)\b', # advérbios
+    re.IGNORECASE
+)
+
+# Indicações de edição/formatação que o modelo não deveria incluir
+_FORMATACAO_PROIBIDA = re.compile(
+    r'\[\s*(?:pausa|silêncio|ênfase|lento|rápido|pause|silence|emphasis|slow|fast'  
+    r'|breath|breathing|sigh|laugh|cry|whispering|shouting)\s*\]',
+    re.IGNORECASE
+)
+
+# Símbolos e caracteres especiais que não são pontuação natural
+_SIMBOLOS_ESPECIAIS = re.compile(
+    r'[\*\_\^\~\|\{\}\[\]\<\>\=\+\@\#\$\%\&]'
+)
+
+
+def _sanitizar_roteiro(roteiro: str) -> str:
+    """
+    Remove do roteiro:
+    - Sons, onomatopeias e risadas (hm, kk, rs, haha, etc.)
+    - Palavras em inglês ou outros idiomas
+    - Indicações de formatação/edição
+    - Símbolos especiais não pertencentes à pontuação
+    - Linhas vazias excessivas
+    """
+    # Remove sons proibidos
+    roteiro = _SONS_PROIBIDOS.sub('', roteiro)
+
+    # Remove indicações de formatação entre colchetes
+    roteiro = _FORMATACAO_PROIBIDA.sub('', roteiro)
+
+    # Remove símbolos especiais (mantém pontuação padrão)
+    roteiro = _SIMBOLOS_ESPECIAIS.sub('', roteiro)
+
+    # Remove linhas que são APENAS palavras em inglês (linhas muito suspeitas)
+    linhas = roteiro.split('\n')
+    linhas_limpas = []
+    for linha in linhas:
+        linha_stripped = linha.strip()
+        if not linha_stripped:
+            linhas_limpas.append('')
+            continue
+        # Conta palavras em inglês vs total na linha
+        palavras_linha = linha_stripped.split()
+        if len(palavras_linha) > 0:
+            matches_ingles = len(_INGLES_PATTERN.findall(linha_stripped))
+            # Se mais de 50% das palavras são em inglês, pula a linha
+            if matches_ingles / len(palavras_linha) > 0.5 and len(palavras_linha) > 2:
+                print(f"  ⚠️  Linha suspeita (inglês) removida: {linha_stripped[:60]}")
+                continue
+        linhas_limpas.append(linha)
+
+    roteiro = '\n'.join(linhas_limpas)
+
+    # Remove espaços múltiplos gerados pelas remoções
+    roteiro = re.sub(r'  +', ' ', roteiro)
+
+    # Remove linhas em branco excessivas (mais de 2 seguidas)
+    roteiro = re.sub(r'\n{3,}', '\n\n', roteiro)
+
+    return roteiro.strip()
+
+
+def _roteiro_tem_alucinacao(roteiro: str) -> tuple[bool, str]:
+    """
+    Verifica se o roteiro contém sinais claros de alucinação.
+    Retorna (tem_problema, motivo).
+    """
+    # Verifica sons/onomatopeias
+    sons = _SONS_PROIBIDOS.findall(roteiro)
+    if sons:
+        return True, f"Sons/onomatopeias encontrados: {sons[:5]}"
+
+    # Verifica excesso de palavras em inglês
+    palavras_total = len(roteiro.split())
+    if palavras_total > 0:
+        matches_ingles = len(_INGLES_PATTERN.findall(roteiro))
+        proporcao = matches_ingles / palavras_total
+        if proporcao > 0.15:  # mais de 15% das palavras em inglês = suspeito
+            return True, f"Excesso de inglês: {matches_ingles}/{palavras_total} palavras ({proporcao:.0%})"
+
+    # Verifica se o roteiro é muito curto (menos de 40 palavras = alucinação/truncamento)
+    if palavras_total < 40:
+        return True, f"Roteiro muito curto: apenas {palavras_total} palavras"
+
+    # Verifica se o roteiro está em branco
+    if not roteiro.strip():
+        return True, "Roteiro vazio"
+
+    return False, ""
 
 
 # ── Extrator de roteiro ──────────────────────────────────────────────────
@@ -1045,7 +1191,7 @@ def gerar_roteiro(tema: str) -> dict:
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt},
                     ],
-                    temperature=0.7,
+                    temperature=0.55,
                     max_tokens=1500,
                     extra_headers={
                         "HTTP-Referer": "https://github.com/robsonvit/PORRADA-videos",
@@ -1061,7 +1207,17 @@ def gerar_roteiro(tema: str) -> dict:
                     raise ValueError(f"{modelo} retornou conteúdo vazio")
 
                 result = _extrair_roteiro(content, tema)
-                print(f"  ✅ Roteiro gerado com sucesso via {modelo}")
+
+                # Verifica alucinações antes de aceitar
+                tem_problema, motivo = _roteiro_tem_alucinacao(result["roteiro_fala"])
+                if tem_problema:
+                    print(f"  ⚠️  Roteiro com alucinação detectada ({motivo}). Tentando próximo modelo...")
+                    result = None
+                    raise ValueError(f"Roteiro rejeitado: {motivo}")
+
+                # Sanitiza o roteiro (remove resíduos)
+                result["roteiro_fala"] = _sanitizar_roteiro(result["roteiro_fala"])
+                print(f"  ✅ Roteiro gerado e validado via {modelo}")
                 break
 
             except Exception as e:
@@ -1087,7 +1243,7 @@ def gerar_roteiro(tema: str) -> dict:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=0.7,
+                temperature=0.55,
                 max_tokens=1500,
             )
 
@@ -1097,7 +1253,13 @@ def gerar_roteiro(tema: str) -> dict:
                 raise ValueError("Grok retornou conteúdo vazio")
 
             result = _extrair_roteiro(content, tema)
-            print(f"  ✅ Roteiro gerado com sucesso via Grok (grok-beta)")
+
+            # Verifica alucinações no fallback Grok
+            tem_problema, motivo = _roteiro_tem_alucinacao(result["roteiro_fala"])
+            if tem_problema:
+                print(f"  ⚠️  Roteiro Grok com alucinação ({motivo}). Sanitizando...")
+            result["roteiro_fala"] = _sanitizar_roteiro(result["roteiro_fala"])
+            print(f"  ✅ Roteiro gerado e validado via Grok (grok-beta)")
         except Exception as e:
             print(f"  ⚠️ Fallback Grok falhou: {e}")
             last_error = e
