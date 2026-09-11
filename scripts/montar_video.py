@@ -6,7 +6,7 @@ Correções aplicadas:
   [FIX-2] Frame freeze: fps=30 + setpts=PTS-STARTPTS em todos os clips antes do concat
   [FIX-3] Legenda embolada: escape seguro via re.sub + pausa mínima 0.6s por bloco
   [FIX-4] Voz rápida: tempo mínimo por bloco aumentado para 0.6s
-  [FIX-5] Volume voz 110%, música 20%
+  [FIX-5] Volume voz 140%, música 20%
   [FIX-6] Legendas sem sobreposição: fim de cada bloco limitado ao início do próximo
 """
 
@@ -342,29 +342,29 @@ def montar_video(
     )
 
     # ── Monta áudio: narração pura OU narração + fundo 20% ────────────────────
-    # [FIX-5] Voz em 110% (Fish Audio é baixinho), música em 20%
+    # [FIX-5] Voz em 140% (Fish Audio é baixinho), música em 20%
     if musica_escolhida:
-        print("Mixando narracao + musica de fundo (voz 110%, fundo 20%)...")
+        print("Mixando narracao + musica de fundo (voz 140%, fundo 20%)...")
         ffmpeg_inputs = [
             "-i", video_concat,
             "-i", audio_file,
             "-i", musica_escolhida,
         ]
-        # amix: voz em 110%, música em 20%. duration=first → corta na narração
+        # amix: voz em 140%, música em 20%. duration=first → corta na narração
         audio_filter = (
-            "[1:a]volume=1.10[voz];"
+            "[1:a]volume=1.40[voz];"
             "[2:a]volume=0.20,atrim=duration=" + str(duracao_total) + "[bgm];"
             "[voz][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]"
         )
         filter_final = filter_complex + f";{audio_filter}"
         audio_map = ["-map", "[aout]"]
     else:
-        # Sem música: ainda aplica 110% de volume na voz
+        # Sem música: ainda aplica 140% de volume na voz
         ffmpeg_inputs = [
             "-i", video_concat,
             "-i", audio_file,
         ]
-        filter_final = filter_complex + ";[1:a]volume=1.10[aout]"
+        filter_final = filter_complex + ";[1:a]volume=1.40[aout]"
         audio_map = ["-map", "[aout]"]
 
     print("Renderizando video final com audio + legendas + efeitos...")
