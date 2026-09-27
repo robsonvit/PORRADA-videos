@@ -106,9 +106,12 @@ def _download_video(url: str, filepath: str) -> bool:
 
 def _buscar_por_keyword(keyword: str, per_page: int = 12) -> list:
     """Busca vídeos no Pexels por palavra-chave. Retorna lista de vídeos."""
+    # Escolhe uma página aleatória para garantir que os vídeos não se repitam
+    page = random.randint(1, 10)
     params = {
         "query": keyword,
         "per_page": per_page,
+        "page": page,
         "orientation": "landscape",
         "size": "medium",
     }
